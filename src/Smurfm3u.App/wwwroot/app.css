@@ -269,10 +269,49 @@ input[type=checkbox] {
     font-weight: 500;
 }
 
-.field .hint {
+.hint {
     color: var(--text-dim);
     font-size: 0.8rem;
     margin-top: 0.2rem;
+}
+
+/* A hint that describes a whole card rather than one field sits under its heading. */
+.card > .hint {
+    margin: -0.35rem 0 1rem;
+}
+
+/* A card's own heading sits flush with the top of the card. */
+.card > h2:first-child,
+.card > h3:first-child {
+    margin-top: 0;
+}
+
+/* Subheadings inside a card are quieter than the card's own title. */
+.card h3 {
+    font-size: 0.95rem;
+    margin: 1.25rem 0 0.5rem;
+}
+
+.card > .actions {
+    margin-top: 0.75rem;
+}
+
+/* The label of a checkbox belongs beside it, not above it. */
+.inline-field label {
+    margin-bottom: 0;
+    font-weight: 400;
+}
+
+/* A row of checkboxes read as one control: notification events, days of the week. */
+.check-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem 1rem;
+}
+
+.check-row label {
+    color: var(--text-dim);
+    font-size: 0.8rem;
 }
 
 .field-grid {
@@ -427,4 +466,16 @@ input[type=checkbox] {
 .pager button[disabled] {
     opacity: 0.4;
     cursor: default;
+}
+
+/* The primary action of a long form stays reachable from anywhere in it. */
+.save-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 4;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 0 1.25rem;
+    background: linear-gradient(to top, var(--bg) 60%, transparent);
 }

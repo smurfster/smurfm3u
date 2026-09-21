@@ -29,7 +29,7 @@
 else
 {
     <div class="card">
-        <h2 style="margin-top:0">Connection</h2>
+        <h2>Connection</h2>
 
         <div class="field">
             <label>API key</label>
@@ -79,7 +79,7 @@ else
     </div>
 
     <div class="card">
-        <h2 style="margin-top:0">Downloads</h2>
+        <h2>Downloads</h2>
 
         <div class="field-grid">
             <div class="field">
@@ -112,28 +112,176 @@ else
 
         <div class="field inline-field">
             <input type="checkbox" id="deleteFailed" @bind="settings.DeleteFailedFiles" />
-            <label for="deleteFailed" style="margin:0">Delete partial files when a download fails for good</label>
+            <label for="deleteFailed">Delete partial files when a download fails for good</label>
         </div>
     </div>
 
     <div class="card">
-        <h2 style="margin-top:0">Notifications</h2>
+        <h2>Path mappings</h2>
+        <p class="hint">
+            Only needed when Sonarr and Radarr see the finished files somewhere other than the
+            directories above &mdash; a different mount point, or a network share. The paths we
+            report are rewritten; nothing changes about where downloads are actually written.
+            Leave this empty if every app sees the same paths.
+        </p>
+
+        @if (settings.PathMappings.Count > 0)
+        {
+            <table>
+                <thead>
+                <tr>
+                    <th>Our path</th>
+                    <th>As Sonarr and Radarr see it</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach (var mapping in settings.PathMappings)
+                {
+                    <tr>
+                        <td><input class="mono" @bind="mapping.From" placeholder="/downloads/complete" /></td>
+                        <td><input class="mono" @bind="mapping.To" placeholder="/mnt/smurfm3u/complete" /></td>
+                        <td><button class="small danger" @onclick="() => RemoveMapping(mapping)">Remove</button></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+            <div class="hint">
+                The longest matching path wins, and a path only matches on a whole folder name.
+                A mapping with either side left blank is dropped when you save.
+            </div>
+        }
+        else
+        {
+            <p class="muted">No mappings. Paths are reported exactly as they are above.</p>
+        }
+
+        <div class="actions">
+            <button @onclick="AddMapping">Add mapping</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Search results</h2>
+
+        <div class="field-grid">
+            <div class="field">
+                <label>Max results per query</label>
+                <input type="number" @bind="settings.MaxSearchResults" />
+            </div>
+            <div class="field">
+                <label>Assumed bitrate (kbps)</label>
+                <input type="number" @bind="settings.AssumedBitrateKbps" />
+                <div class="hint">Used with the runtime to estimate release size.</div>
+            </div>
+            <div class="field">
+                <label>Fallback size (MiB)</label>
+                <input type="number" @bind="settings.FallbackSizeMib" />
+                <div class="hint">When neither a size nor a runtime is known.</div>
+            </div>
+        </div>
+
+        <div class="field inline-field">
+            <input type="checkbox" id="relaxedSearch" @bind="settings.RelaxedSearchFallback" />
+            <label for="relaxedSearch">Return the closest entries when no entry has every word</label>
+        </div>
+        <div class="hint">
+            A query only matches an entry containing all of its words, so one word the playlist
+            does not use returns nothing &mdash; searching "Mark Rober's CrunchLabs" misses an
+            entry called "Camp CrunchLabs". With this on, such a query falls back to the entries
+            matching best, preferring longer and rarer words over short common ones.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Speed limits</h2>
+
+        <div class="field-grid">
+            <div class="field">
+                <label>Manual global limit (KiB/s)</label>
+                <input type="number" @bind="settings.ManualSpeedLimitKibps" />
+                <div class="hint">0 is unlimited. Sonarr and Radarr can change this through the SABnzbd API.</div>
+            </div>
+        </div>
+
+        <h3>Scheduled limits</h3>
+        <p class="hint">
+            The tightest active window wins. A window set to 0 KiB/s pauses downloading entirely.
+            Times are in the server's local time zone and may wrap past midnight.
+        </p>
+
+        @if (windows.Count > 0)
+        {
+            <table>
+                <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Days</th>
+                    <th>From</th>
+                    <th>To</th>
+                    <th class="numeric">KiB/s</th>
+                    <th>On</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach (var window in windows)
+                {
+                    <tr>
+                        <td><input @bind="window.Name" /></td>
+                        <td>
+                            <div class="check-row">
+                                @foreach (var day in Days)
+                                {
+                                    <label class="inline-field">
+                                        <input type="checkbox"
+                                               checked="@SpeedLimitService.IsDaySet(window, day)"
+                                               @onchange="e => ToggleDay(window, day, e)" />
+                                        <span>@day.ToString()[..2]</span>
+                                    </label>
+                                }
+                            </div>
+                        </td>
+                        <td><input type="time" value="@window.StartTime.ToString("HH\\:mm")"
+                                   @onchange="e => SetTime(window, isStart: true, e)" /></td>
+                        <td><input type="time" value="@window.EndTime.ToString("HH\\:mm")"
+                                   @onchange="e => SetTime(window, isStart: false, e)" /></td>
+                        <td class="numeric"><input type="number" @bind="window.LimitKibps" /></td>
+                        <td><input type="checkbox" @bind="window.Enabled" /></td>
+                        <td><button class="small danger" @onclick="() => RemoveWindow(window)">Remove</button></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <p class="muted">No scheduled limits. Downloads run unthrottled unless a manual limit is set.</p>
+        }
+
+        <div class="actions">
+            <button @onclick="AddWindow">Add window</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Notifications</h2>
 
         <div class="field inline-field">
             <input type="checkbox" id="notifyEnabled" @bind="settings.Notifications.Enabled" />
-            <label for="notifyEnabled" style="margin:0">Send notifications over SMTP</label>
+            <label for="notifyEnabled">Send notifications over SMTP</label>
         </div>
 
         <div class="field">
             <label>Send on</label>
-            <div class="actions">
+            <div class="check-row">
                 @foreach (var kind in NotificationKinds)
                 {
-                    <label class="inline-field" style="gap:.25rem">
+                    <label class="inline-field">
                         <input type="checkbox"
                                checked="@settings.Notifications.Events.Contains(kind)"
                                @onchange="e => ToggleEvent(kind, e)" />
-                        <span class="muted" style="font-size:.8rem">@NotificationComposer.Describe(kind)</span>
+                        <span>@NotificationComposer.Describe(kind)</span>
                     </label>
                 }
             </div>
@@ -175,98 +323,21 @@ else
 
         <div class="field inline-field">
             <input type="checkbox" id="notifyImplicitTls" @bind="settings.Notifications.Smtp.UseImplicitTls" />
-            <label for="notifyImplicitTls" style="margin:0">
+            <label for="notifyImplicitTls">
                 Implicit TLS (port 465). Leave off for STARTTLS, which is used when the server offers it.
             </label>
         </div>
 
-        <div class="actions" style="margin-top:.75rem">
+        <div class="actions">
             <button @onclick="SendTestNotificationAsync" disabled="@sendingTest">
                 @(sendingTest ? "Sending..." : "Send test")
             </button>
-            <span class="muted" style="font-size:.8rem">Uses what is on screen; no need to save first.</span>
+            <span>Uses what is on screen; no need to save first.</span>
         </div>
     </div>
 
     <div class="card">
-        <h2 style="margin-top:0">Path mappings</h2>
-        <p class="hint" style="margin-top:0">
-            Only needed when Sonarr and Radarr see the finished files somewhere other than the
-            directories above &mdash; a different mount point, or a network share. The paths we
-            report are rewritten; nothing changes about where downloads are actually written.
-            Leave this empty if every app sees the same paths.
-        </p>
-
-        @if (settings.PathMappings.Count > 0)
-        {
-            <table>
-                <thead>
-                <tr>
-                    <th>Our path</th>
-                    <th>As Sonarr and Radarr see it</th>
-                    <th></th>
-                </tr>
-                </thead>
-                <tbody>
-                @foreach (var mapping in settings.PathMappings)
-                {
-                    <tr>
-                        <td><input class="mono" @bind="mapping.From" placeholder="/downloads/complete" /></td>
-                        <td><input class="mono" @bind="mapping.To" placeholder="/mnt/smurfm3u/complete" /></td>
-                        <td><button class="small danger" @onclick="() => RemoveMapping(mapping)">Remove</button></td>
-                    </tr>
-                }
-                </tbody>
-            </table>
-            <div class="hint">
-                The longest matching path wins, and a path only matches on a whole folder name.
-                A mapping with either side left blank is dropped when you save.
-            </div>
-        }
-        else
-        {
-            <p class="muted">No mappings. Paths are reported exactly as they are above.</p>
-        }
-
-        <div class="actions" style="margin-top:.75rem">
-            <button @onclick="AddMapping">Add mapping</button>
-        </div>
-    </div>
-
-    <div class="card">
-        <h2 style="margin-top:0">Search results</h2>
-
-        <div class="field-grid">
-            <div class="field">
-                <label>Max results per query</label>
-                <input type="number" @bind="settings.MaxSearchResults" />
-            </div>
-            <div class="field">
-                <label>Assumed bitrate (kbps)</label>
-                <input type="number" @bind="settings.AssumedBitrateKbps" />
-                <div class="hint">Used with the runtime to estimate release size.</div>
-            </div>
-            <div class="field">
-                <label>Fallback size (MiB)</label>
-                <input type="number" @bind="settings.FallbackSizeMib" />
-                <div class="hint">When neither a size nor a runtime is known.</div>
-            </div>
-        </div>
-
-        <div class="field inline-field">
-            <input type="checkbox" id="relaxedSearch" @bind="settings.RelaxedSearchFallback" />
-            <label for="relaxedSearch" style="margin:0">Return the closest entries when no entry has every word</label>
-        </div>
-        <div class="hint">
-            A query only matches an entry containing all of its words, so one word the playlist
-            does not use returns nothing &mdash; searching "Mark Rober's CrunchLabs" misses an
-            entry called "Camp CrunchLabs". With this on, such a query falls back to the entries
-            matching best, preferring longer and rarer words over short common ones.
-        </div>
-    </div>
-
-    <div class="card">
-        <h2 style="margin-top:0">History retention</h2>
+        <h2>History retention</h2>
 
         <div class="field-grid">
             <div class="field">
@@ -282,81 +353,14 @@ else
         </div>
     </div>
 
-    <div class="card">
-        <h2 style="margin-top:0">Speed limits</h2>
-
-        <div class="field" style="max-width:320px">
-            <label>Manual global limit (KiB/s)</label>
-            <input type="number" @bind="settings.ManualSpeedLimitKibps" />
-            <div class="hint">0 is unlimited. Sonarr and Radarr can change this through the SABnzbd API.</div>
-        </div>
-
-        <h3 style="font-size:.95rem">Scheduled limits</h3>
-        <p class="hint" style="margin-top:0">
-            The tightest active window wins. A window set to 0 KiB/s pauses downloading entirely.
-            Times are in the server's local time zone and may wrap past midnight.
-        </p>
-
-        @if (windows.Count > 0)
-        {
-            <table>
-                <thead>
-                <tr>
-                    <th>Name</th>
-                    <th>Days</th>
-                    <th>From</th>
-                    <th>To</th>
-                    <th class="numeric">KiB/s</th>
-                    <th>On</th>
-                    <th></th>
-                </tr>
-                </thead>
-                <tbody>
-                @foreach (var window in windows)
-                {
-                    <tr>
-                        <td><input @bind="window.Name" /></td>
-                        <td>
-                            <div class="actions">
-                                @foreach (var day in Days)
-                                {
-                                    <label class="inline-field" style="gap:.15rem">
-                                        <input type="checkbox"
-                                               checked="@SpeedLimitService.IsDaySet(window, day)"
-                                               @onchange="e => ToggleDay(window, day, e)" />
-                                        <span class="muted" style="font-size:.75rem">@day.ToString()[..2]</span>
-                                    </label>
-                                }
-                            </div>
-                        </td>
-                        <td><input type="time" value="@window.StartTime.ToString("HH\\:mm")"
-                                   @onchange="e => SetTime(window, isStart: true, e)" /></td>
-                        <td><input type="time" value="@window.EndTime.ToString("HH\\:mm")"
-                                   @onchange="e => SetTime(window, isStart: false, e)" /></td>
-                        <td class="numeric"><input type="number" @bind="window.LimitKibps" /></td>
-                        <td><input type="checkbox" @bind="window.Enabled" /></td>
-                        <td><button class="small danger" @onclick="() => RemoveWindow(window)">Remove</button></td>
-                    </tr>
-                }
-                </tbody>
-            </table>
-        }
-        else
-        {
-            <p class="muted">No scheduled limits. Downloads run unthrottled unless a manual limit is set.</p>
-        }
-
-        <div class="actions" style="margin-top:.75rem">
-            <button @onclick="AddWindow">Add window</button>
-        </div>
-    </div>
-
-    <div class="actions" style="margin-bottom:1.5rem">
+    @* Sticky, so the button is reachable from anywhere in a form this long. *@
+    <div class="save-bar">
         <button class="primary" @onclick="SaveAsync">Save settings</button>
+        <span class="muted">Everything above is saved together. Your password is changed separately, below.</span>
     </div>
 
     <div class="card">
-        <h2 style="margin-top:0">Change password</h2>
+        <h2>Change password</h2>
 
         <div class="field-grid">
             <div class="field">
