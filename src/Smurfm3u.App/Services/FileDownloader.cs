@@ -50,7 +50,6 @@ public class FileDownloader(
         {
             download.Status = DownloadStatus.Downloading;
             download.StartedAt ??= clock.GetUtcNow();
-            download.AttemptCount++;
             download.FailureMessage = null;
             download.IncompletePath = incompleteFile;
             await db.SaveChangesAsync(CancellationToken.None);
@@ -131,8 +130,11 @@ public class FileDownloader(
 
         response.EnsureSuccessStatusCode();
 
+        // Only a length the server actually declared can be checked against at the end;
+        // TotalBytes may be our own estimate, which a real transfer will rarely match.
         var contentLength = response.Content.Headers.ContentLength ?? 0;
-        var total = contentLength > 0 ? contentLength + resumeFrom : download.TotalBytes;
+        var expected = contentLength > 0 ? contentLength + resumeFrom : 0;
+        var total = expected > 0 ? expected : download.TotalBytes;
 
         Interlocked.Exchange(ref handle.TotalBytes, total);
         Interlocked.Exchange(ref handle.DownloadedBytes, resumeFrom);
@@ -160,8 +162,7 @@ public class FileDownloader(
         {
             if (handle.PauseRequested)
             {
-                await file.FlushAsync(CancellationToken.None);
-                await PersistProgressAsync(db, download, downloaded, 0);
+                await CheckpointAsync(db, download, file, downloaded, 0);
                 return false;
             }
 
@@ -189,13 +190,19 @@ public class FileDownloader(
 
             if (Stopwatch.GetElapsedTime(lastFlush) >= ProgressInterval)
             {
-                await PersistProgressAsync(db, download, downloaded, Interlocked.Read(ref handle.BytesPerSecond));
+                await CheckpointAsync(db, download, file, downloaded, Interlocked.Read(ref handle.BytesPerSecond));
                 lastFlush = Stopwatch.GetTimestamp();
             }
         }
 
-        await file.FlushAsync(ct);
-        download.DownloadedBytes = downloaded;
+        await CheckpointAsync(db, download, file, downloaded, 0);
+
+        // A connection dropped mid-transfer ends the stream early and is indistinguishable
+        // from a clean finish. Anything short of the declared length is a failure, not a
+        // completed file the *arr apps should import.
+        if (expected > 0 && downloaded < expected)
+            throw new IOException($"Transfer ended after {downloaded} of {expected} bytes");
+
         return true;
     }
 
@@ -208,8 +215,17 @@ public class FileDownloader(
         return bucket;
     }
 
-    private static async Task PersistProgressAsync(AppDbContext db, DownloadItem download, long downloaded, long rate)
+    /// <summary>
+    /// Pushes the file all the way to disk before recording how far we have got, so the
+    /// recorded offset is never ahead of what would survive a power cut. Startup recovery
+    /// trims a partial file back to this offset, and that pairing is what makes resuming
+    /// after a hard reset safe rather than merely likely to work.
+    /// </summary>
+    private static async Task CheckpointAsync(
+        AppDbContext db, DownloadItem download, FileStream file, long downloaded, long rate)
     {
+        file.Flush(flushToDisk: true);
+
         download.DownloadedBytes = downloaded;
         download.BytesPerSecond = rate;
         await db.SaveChangesAsync(CancellationToken.None);
@@ -253,6 +269,10 @@ public class FileDownloader(
         AppDbContext db, DownloadItem download, Core.Options.ServiceSettings settings,
         string incompleteFile, Exception ex)
     {
+        // Counted here rather than at the start of a run, so a restart that resumes a
+        // download does not burn one of its retries. Only a real failure costs an attempt.
+        download.AttemptCount++;
+
         var giveUp = download.AttemptCount >= settings.MaxDownloadAttempts;
 
         logger.Log(giveUp ? LogLevel.Error : LogLevel.Warning, ex,

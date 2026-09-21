@@ -25,8 +25,6 @@ public class DownloadWorker(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await ResetOrphanedDownloadsAsync(stoppingToken);
-
         using var timer = new PeriodicTimer(PollInterval, clock);
 
         try
@@ -49,30 +47,6 @@ public class DownloadWorker(
         catch (OperationCanceledException)
         {
             // Normal shutdown.
-        }
-    }
-
-    /// <summary>
-    /// A previous process may have died mid-transfer, leaving rows marked Downloading.
-    /// Nothing is running now, so put them back in the queue; partial files let them resume.
-    /// </summary>
-    private async Task ResetOrphanedDownloadsAsync(CancellationToken ct)
-    {
-        try
-        {
-            await using var db = await dbFactory.CreateDbContextAsync(ct);
-            var reset = await db.Downloads
-                .Where(x => x.Status == DownloadStatus.Downloading)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(x => x.Status, DownloadStatus.Queued)
-                    .SetProperty(x => x.BytesPerSecond, 0L), ct);
-
-            if (reset > 0)
-                logger.LogInformation("Requeued {Count} download(s) interrupted by a restart", reset);
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Could not requeue interrupted downloads");
         }
     }
 

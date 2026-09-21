@@ -252,6 +252,32 @@ Two mechanisms combine, and the tightest active constraint wins:
 
 Per-playlist limits apply on top of whichever global limit is in force.
 
+## Crashes and reboots
+
+Nothing has to be done by hand after a crash, a `docker kill`, or a host that loses power.
+The service reconciles itself at startup, before it serves a single request:
+
+| Left behind | What happens on the next start |
+| --- | --- |
+| A download still marked as downloading | Put back in the queue and resumed from its partial file |
+| A partial file longer than the last recorded progress | Cut back to the last checkpoint, so no unwritten tail is ever treated as downloaded |
+| A playlist left mid-refresh | Marked failed, so the scheduler stops skipping it and runs it again at its next cron time |
+| An incomplete folder with no download left to resume it | Removed, so abandoned partials do not accumulate |
+
+Anything it had to put right is summarised in one line in the log:
+
+```
+Recovered from an unclean shutdown: requeued 1 download(s), reset 1 source(s), trimmed 1 partial file(s), removed 1 orphaned folder(s)
+```
+
+A resumed download continues over HTTP range requests and keeps the bytes it already had. If
+the provider does not support ranges, it starts again from the beginning. Being interrupted
+never counts against a download's retry budget — only a real failure does — so a machine that
+reboots repeatedly cannot exhaust the retries of a download that was working fine.
+
+Paused downloads stay paused across a restart, because that was your decision rather than an
+accident.
+
 ## History
 
 - **Queue** and **History** show downloads; history rows can be retried or deleted.

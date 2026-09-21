@@ -32,6 +32,7 @@ builder.Services.AddScoped<SabnzbdHandler>();
 builder.Services.AddScoped<M3uRefreshService>();
 builder.Services.AddScoped<FileDownloader>();
 builder.Services.AddScoped<DatabaseInitializer>();
+builder.Services.AddScoped<StartupRecoveryService>();
 builder.Services.AddScoped<SearchHistoryService>();
 
 builder.Services.AddHostedService<DownloadWorker>();
@@ -131,6 +132,10 @@ await using (var scope = app.Services.CreateAsyncScope())
 {
     var initializer = scope.ServiceProvider.GetRequiredService<DatabaseInitializer>();
     await initializer.InitializeAsync();
+
+    // Anything the previous process left half-done is put right before the first request.
+    var recovery = scope.ServiceProvider.GetRequiredService<StartupRecoveryService>();
+    await recovery.RecoverAsync();
 }
 
 app.Run();
