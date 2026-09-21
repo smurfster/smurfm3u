@@ -1,5 +1,6 @@
 @page "/"
 @using Microsoft.EntityFrameworkCore
+@using Smurfm3u.Core.Models
 @using Smurfm3u.Data
 @attribute [Authorize]
 @rendermode InteractiveServer
@@ -61,7 +62,7 @@
 
 <h2>Playlists</h2>
 
-@if (sources.Count == 0)
+@if (totalSources == 0)
 {
     <div class="card empty">
         No playlists yet. <a href="sources">Add one</a> to start ingesting VOD entries.
@@ -98,11 +99,14 @@ else
             </tbody>
         </table>
     </div>
+
+    <Pager Page="sourcePage" PageSize="sourcePageSize" TotalCount="totalSources"
+           PageChanged="GoToSourcePageAsync" PageSizeChanged="SetSourcePageSizeAsync" />
 }
 
 <h2>Recent downloads</h2>
 
-@if (recent.Count == 0)
+@if (recentTotal == 0)
 {
     <div class="card empty">Nothing has been downloaded yet.</div>
 }
@@ -131,11 +135,20 @@ else
             </tbody>
         </table>
     </div>
+
+    <Pager Page="recentPage" PageSize="recentPageSize" TotalCount="recentTotal"
+           PageChanged="GoToRecentPageAsync" PageSizeChanged="SetRecentPageSizeAsync" />
 }
 
 @code {
     private readonly List<M3uSource> sources = [];
     private readonly List<DownloadItem> recent = [];
+
+    private int sourcePage = 1;
+    private int sourcePageSize = 25;
+    private int recentTotal;
+    private int recentPage = 1;
+    private int recentPageSize = 25;
 
     private int totalSources;
     private int enabledSources;
@@ -177,27 +190,72 @@ else
     {
         await using var db = await DbFactory.CreateDbContextAsync();
 
-        var allSources = await db.Sources.AsNoTracking().OrderBy(x => x.Name).ToListAsync();
-        sources.Clear();
-        sources.AddRange(allSources);
+        // The tiles count the whole table; only the grids below are paged.
+        totalSources = await db.Sources.CountAsync();
+        enabledSources = await db.Sources.CountAsync(x => x.Enabled);
 
-        totalSources = allSources.Count;
-        enabledSources = allSources.Count(x => x.Enabled);
+        var sourceRows = await db.Sources.AsNoTracking()
+            .OrderBy(x => x.Name)
+            .Skip(new PageRange(sourcePage, sourcePageSize, totalSources).Skip)
+            .Take(sourcePageSize)
+            .ToListAsync();
+
+        sources.Clear();
+        sources.AddRange(sourceRows);
 
         itemCount = await db.Items.CountAsync(x => x.IsActive);
         queuedCount = await db.Downloads.CountAsync(x =>
             x.Status == DownloadStatus.Queued || x.Status == DownloadStatus.Paused);
 
-        var recentRows = await db.Downloads.AsNoTracking()
-            .Where(x => x.CompletedAt != null)
+        var finished = db.Downloads.AsNoTracking().Where(x => x.CompletedAt != null);
+
+        recentTotal = await finished.CountAsync();
+
+        var recentRows = await finished
             .OrderByDescending(x => x.CompletedAt)
-            .Take(10)
+            .Skip(new PageRange(recentPage, recentPageSize, recentTotal).Skip)
+            .Take(recentPageSize)
             .ToListAsync();
 
         recent.Clear();
         recent.AddRange(recentRows);
 
         apiKey = (await Settings.GetAsync()).ApiKey;
+
+        // This page reloads itself every few seconds, so a page that has gone away under the
+        // reader is corrected here rather than left showing an empty grid.
+        if ((sources.Count == 0 && sourcePage > 1) || (recent.Count == 0 && recentPage > 1))
+        {
+            if (sources.Count == 0) sourcePage = 1;
+            if (recent.Count == 0) recentPage = 1;
+            await LoadAsync();
+        }
+    }
+
+    private Task GoToSourcePageAsync(int target)
+    {
+        sourcePage = target;
+        return LoadAsync();
+    }
+
+    private Task SetSourcePageSizeAsync(int size)
+    {
+        sourcePageSize = size;
+        sourcePage = 1;
+        return LoadAsync();
+    }
+
+    private Task GoToRecentPageAsync(int target)
+    {
+        recentPage = target;
+        return LoadAsync();
+    }
+
+    private Task SetRecentPageSizeAsync(int size)
+    {
+        recentPageSize = size;
+        recentPage = 1;
+        return LoadAsync();
     }
 
     private static RenderFragment RefreshPill(M3uSource source) => builder =>

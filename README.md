@@ -330,9 +330,13 @@ described under Searching above.
 
 ### Paging
 
-The Queue, History, Search and Searches grids all page the same way: a row count, First,
-Prev, Next and Last, and a page size of 25, 50, 100 or 200. Changing the page size returns
-to the first page, since page 9 of the old size is rarely page 9 of the new one.
+Every grid pages the same way &mdash; Dashboard, Playlists, Queue, History, Search and
+Searches &mdash; with a row count, First, Prev, Next and Last, and a page size of 25, 50, 100
+or 200. Changing the page size returns to the first page, since page 9 of the old size is
+rarely page 9 of the new one.
+
+The dashboard tiles still count whole tables; only the grids beneath them are paged. Its
+recent downloads grid used to stop at ten rows and now walks the whole history.
 
 Deleting a row keeps you on the page you were on. Clearing a whole page, or a queue draining
 while you watch it, returns to the first page rather than leaving you somewhere empty.

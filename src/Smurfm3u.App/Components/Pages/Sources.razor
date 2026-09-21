@@ -1,6 +1,7 @@
 @page "/sources"
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.EntityFrameworkCore
+@using Smurfm3u.Core.Models
 @using Smurfm3u.Data
 @attribute [Authorize]
 @rendermode InteractiveServer
@@ -183,11 +184,18 @@ else
             </tbody>
         </table>
     </div>
+
+    <Pager Page="page" PageSize="pageSize" TotalCount="total"
+           PageChanged="GoToPageAsync" PageSizeChanged="SetPageSizeAsync" />
 }
 
 @code {
     private readonly List<M3uSource> sources = [];
     private readonly HashSet<int> refreshing = [];
+
+    private int total;
+    private int page = 1;
+    private int pageSize = 25;
 
     private SourceForm? editing;
     private string? message;
@@ -198,10 +206,37 @@ else
     private async Task LoadAsync()
     {
         await using var db = await DbFactory.CreateDbContextAsync();
-        var rows = await db.Sources.AsNoTracking().OrderBy(x => x.Name).ToListAsync();
+
+        total = await db.Sources.CountAsync();
+
+        var rows = await db.Sources.AsNoTracking()
+            .OrderBy(x => x.Name)
+            .Skip(new PageRange(page, pageSize, total).Skip)
+            .Take(pageSize)
+            .ToListAsync();
 
         sources.Clear();
         sources.AddRange(rows);
+
+        // Deleting the last playlist on the last page would otherwise leave an empty grid.
+        if (sources.Count == 0 && page > 1)
+        {
+            page = 1;
+            await LoadAsync();
+        }
+    }
+
+    private Task GoToPageAsync(int target)
+    {
+        page = target;
+        return LoadAsync();
+    }
+
+    private Task SetPageSizeAsync(int size)
+    {
+        pageSize = size;
+        page = 1;
+        return LoadAsync();
     }
 
     private void StartAdd() => editing = new SourceForm();
