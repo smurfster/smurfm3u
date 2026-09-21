@@ -52,23 +52,28 @@ the source of truth.
 
 ### Where the data lives
 
-By default everything is kept under `./data` beside `docker-compose.yml`. Point any of the
-three somewhere else — another disk, a NAS mount — with a `.env` entry:
+Downloads land on the host, under `./data/downloads` beside `docker-compose.yml` unless you
+say otherwise. Everything else lives in Docker volumes:
 
-| Variable | Default | Holds |
+| What | Where | Holds |
 | --- | --- | --- |
-| `DOWNLOADS_PATH` | `./data/downloads` | Completed and in-progress downloads |
-| `CONFIG_PATH` | `./data/config` | Data protection keys, so a rebuild does not sign everyone out |
-| `PLAYLISTS_PATH` | `./data/playlists` | Local `.m3u` files you want to add as a source |
+| `DOWNLOADS_PATH` | `./data/downloads` on the host | Completed and in-progress downloads |
+| `smurfm3u-db-data` | Docker volume | The database |
+| `smurfm3uapp-config` | Docker volume | Data protection keys, so a rebuild does not sign everyone out |
+
+Point the downloads somewhere else — another disk, a NAS mount — with a `.env` entry:
 
 ```env
 DOWNLOADS_PATH=/mnt/media/smurfm3u
 ```
 
 A relative path must start with `./` or `../`, which is Compose's rule rather than ours.
-Only the host side moves: inside the container these stay at `/downloads`, `/config` and
-`/playlists`, because that is what the app is configured with and what it reports to Sonarr
-and Radarr.
+Only the host side moves: inside the container it stays at `/downloads`, because that is
+what the app is configured with and what it reports to Sonarr and Radarr.
+
+To add local `.m3u` files as a playlist source, uncomment the `/playlists` line in
+`docker-compose.yml` and set `PLAYLISTS_PATH` to the directory holding them. Remote playlist
+URLs need nothing mounted.
 
 ## Connecting the *arr apps
 
@@ -236,7 +241,7 @@ Add them under **Playlists**. Each one has:
 
 | Option | What it does |
 | --- | --- |
-| Type / Location | A remote URL, or a path to a file mounted into `/playlists` |
+| Type / Location | A remote URL, or a path to a file mounted into `/playlists` (that mount is commented out by default) |
 | Enabled | Disabled playlists are ignored by search and by the scheduler |
 | Quality / resolution / group tags | Appended to every release name from this playlist, e.g. `…1080p.WEB-DL-Smurfm3u`. The resolution tag also picks the Newznab subcategory |
 | Simultaneous downloads | Per-playlist cap, under the global cap in Settings |

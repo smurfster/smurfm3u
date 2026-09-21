@@ -9,7 +9,7 @@ services:
       # Change this, or point it at a secret, before exposing anything.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-smurfm3u}
     volumes:
-      - db-data:/var/lib/postgresql/data
+      - smurfm3u-db-data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U smurfm3u -d smurfm3u"]
       interval: 10s
@@ -43,9 +43,13 @@ services:
       # or you will need a remote path mapping in those apps.
       - ${DOWNLOADS_PATH:-./data/downloads}:/downloads
       # Data protection keys, so a rebuild does not sign everyone out.
-      - ${CONFIG_PATH:-./data/config}:/config
-      # Any local .m3u files you want to add as a playlist source.
-      - ${PLAYLISTS_PATH:-./data/playlists}:/playlists
+      - smurfm3uapp-config:/config
+      # Uncomment to add local .m3u files as a playlist source, and point
+      # PLAYLISTS_PATH at the directory holding them.
+      # - ${PLAYLISTS_PATH:-./data/playlists}:/playlists
 
 volumes:
-  db-data:
+  smurfm3u-db-data:
+    name: smurfm3u-db-data
+  smurfm3uapp-config:
+    name: smurfm3uapp-config
