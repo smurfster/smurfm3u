@@ -252,6 +252,17 @@ else
                 <div class="hint">When neither a size nor a runtime is known.</div>
             </div>
         </div>
+
+        <div class="field inline-field">
+            <input type="checkbox" id="relaxedSearch" @bind="settings.RelaxedSearchFallback" />
+            <label for="relaxedSearch" style="margin:0">Return the closest entries when no entry has every word</label>
+        </div>
+        <div class="hint">
+            A query only matches an entry containing all of its words, so one word the playlist
+            does not use returns nothing &mdash; searching "Mark Rober's CrunchLabs" misses an
+            entry called "Camp CrunchLabs". With this on, such a query falls back to the entries
+            matching best, preferring longer and rarer words over short common ones.
+        </div>
     </div>
 
     <div class="card">
@@ -584,6 +595,7 @@ else
         TvCategory = source.TvCategory,
         MovieCategory = source.MovieCategory,
         MaxSearchResults = source.MaxSearchResults,
+        RelaxedSearchFallback = source.RelaxedSearchFallback,
         AssumedBitrateKbps = source.AssumedBitrateKbps,
         FallbackSizeMib = source.FallbackSizeMib,
         MaxDownloadAttempts = source.MaxDownloadAttempts,

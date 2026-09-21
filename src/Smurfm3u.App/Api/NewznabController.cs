@@ -113,8 +113,9 @@ public class NewznabController(
 
         var request = new SearchRequest(kind, q, season, ep, categories, offset, limit);
 
-        var hits = await search.SearchAsync(request, ct);
-        var total = await search.CountAsync(request, ct);
+        var results = await search.SearchAsync(request, ct);
+        var hits = results.Hits;
+        var total = results.Total;
         var apiKey = (await settingsService.GetAsync(ct)).ApiKey;
 
         await RecordSearchAsync(kind, q, season, ep, cat, hits.Count, Stopwatch.GetElapsedTime(started), ct);

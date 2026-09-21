@@ -41,6 +41,12 @@ public class ServiceSettings
     public int MaxSearchResults { get; set; } = 200;
 
     /// <summary>
+    /// When no entry contains every word of a query, answer with the closest entries instead
+    /// of nothing. Off means a query either matches in full or returns empty.
+    /// </summary>
+    public bool RelaxedSearchFallback { get; set; } = true;
+
+    /// <summary>
     /// Used to estimate release size when the playlist does not declare one.
     /// The *arrs reject zero-byte releases and use size to pick between them.
     /// </summary>

@@ -267,6 +267,36 @@ providers actually emit, in this order:
 Everything else is dropped. Entries that leave a playlist are retired rather than deleted,
 so finished downloads keep something to point at.
 
+### Searching
+
+Every word of a query has to appear in an entry title. That keeps "top gear" from matching
+"Gear Top", but it also means one word the playlist does not use sinks the whole query:
+searching for "Mark Rober's CrunchLabs" finds nothing when the playlist calls the show
+"Camp CrunchLabs".
+
+So when nothing contains every word, the search falls back to the entries that match best
+rather than answering empty. Each word scores its own length, and only the best-scoring
+entries come back. For the query above:
+
+| Entry | Words it has | Score |
+| --- | --- | --- |
+| `camp crunchlabs` | crunchlabs | 10 |
+| `mark robers revengineers` | mark, robers | 10 |
+| `top gear america` | none | dropped |
+
+Length stands in for rarity, so one long distinctive word counts for as much as two shorter
+ones without needing statistics over the whole playlist. Entries matching nothing are never
+returned, and a query that matches in full never reaches this stage, so nothing that worked
+before becomes less precise.
+
+Turn it off under **Settings → Search results** if you would rather a query either match in
+full or return nothing.
+
+Punctuation is already ignored on both sides, so "Mark Rober's CrunchLabs" and
+"Mark Robers CrunchLabs" are the same query. Both are reduced to lowercase words with
+apostrophes removed and dotted acronyms welded back together, which is also how titles are
+indexed.
+
 ### Release naming
 
 Playlist names are written for humans browsing an app, so they are parsed and rebuilt into
