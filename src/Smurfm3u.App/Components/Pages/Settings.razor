@@ -45,14 +45,31 @@ else
                 <tbody>
                 <tr>
                     <td>Newznab (Prowlarr)</td>
-                    <td class="mono">@BaseUrl/api</td>
+                    <td class="mono">
+                        URL <span class="mono">@Origin</span><br />
+                        API Path <span class="mono">/api</span>
+                    </td>
                 </tr>
                 <tr>
                     <td>SABnzbd (Sonarr / Radarr)</td>
-                    <td class="mono">@BaseUrl &mdash; leave the URL base empty</td>
+                    <td class="mono">
+                        Host <span class="mono">@HostName</span><br />
+                        Port <span class="mono">@Port</span><br />
+                        URL Base &mdash; leave empty
+                    </td>
                 </tr>
                 </tbody>
             </table>
+            <div class="hint">
+                Each app asks for the host and the path separately, so the two are shown apart:
+                Prowlarr appends its own API Path, and putting /api in its URL field makes it
+                request /api/api, which is not routed here.
+            </div>
+            <div class="hint">
+                The address above is however <em>your browser</em> reached this page. If the *arr
+                app runs in another container it cannot use that: give it this container's name
+                and internal port (8080) instead, or a LAN address both can reach.
+            </div>
             <div class="hint">
                 Both APIs answer on /api; a SABnzbd request is told apart by its "mode" parameter.
                 /newznab/api and /sabnzbd/api work too if you would rather be explicit.
@@ -249,7 +266,12 @@ else
     private string? message;
     private bool messageIsError;
 
-    private string BaseUrl => Nav.BaseUri.TrimEnd('/');
+    // Split apart because Prowlarr, Sonarr and Radarr all ask for the host and the path in
+    // separate fields; handing them a joined URL is what produces requests to /api/api.
+    private Uri Base => new(Nav.BaseUri);
+    private string Origin => Base.GetLeftPart(UriPartial.Authority);
+    private string HostName => Base.Host;
+    private int Port => Base.Port;
 
     protected override async Task OnInitializedAsync()
     {
