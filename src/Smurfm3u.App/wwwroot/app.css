@@ -482,6 +482,31 @@ input[type=checkbox] {
 
 /* ---- File picker ---- */
 
+/* The browse button rides inside the box, so a path field is one control wide. */
+.path-field {
+    position: relative;
+}
+
+.path-field input {
+    /* Room for the button, so a long path is never hidden behind it. */
+    padding-right: 4.9rem;
+    text-overflow: ellipsis;
+}
+
+.path-field button {
+    position: absolute;
+    top: 50%;
+    right: 4px;
+    transform: translateY(-50%);
+    padding: 0.15rem 0.5rem;
+    font-size: 0.78rem;
+    background: var(--bg-raised);
+}
+
+.path-field input:focus + button {
+    border-color: var(--accent);
+}
+
 .modal-backdrop {
     position: fixed;
     inset: 0;

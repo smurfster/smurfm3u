@@ -3,9 +3,10 @@
 @* A path box with a folder browser behind it. The browser opens over the page rather than
    inside the form, so it has room to list and cannot push the layout around. *@
 
-<div class="actions">
+@* The button sits inside the box: these fields are often narrow, and a path is long. *@
+<div class="path-field">
     <input class="mono" value="@Value" placeholder="@Placeholder" @onchange="OnTypedAsync" />
-    <button type="button" class="@ButtonClass" @onclick="OpenAsync">Browse</button>
+    <button type="button" class="@ButtonClass" title="Browse for a path" @onclick="OpenAsync">Browse</button>
 </div>
 
 @if (listing is not null)
