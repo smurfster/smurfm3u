@@ -15,6 +15,12 @@ public class ServiceSettings
     /// <summary>Where finished downloads are moved for the *arr apps to import.</summary>
     public string CompletePath { get; set; } = "/downloads/complete";
 
+    /// <summary>
+    /// Where local .m3u files are looked for, and the only folder the playlist picker will
+    /// list. Mounted as a volume; nothing outside it is browsable from the web UI.
+    /// </summary>
+    public string PlaylistPath { get; set; } = "/playlists";
+
     /// <summary>Where notifications go, and which events send one.</summary>
     public NotificationSettings Notifications { get; set; } = new();
 

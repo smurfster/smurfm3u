@@ -89,7 +89,12 @@ else
             <div class="field">
                 <label>Complete directory</label>
                 <input @bind="settings.CompletePath" />
-                <div class="hint">Reported to Sonarr and Radarr as SABnzbd's complete_dir.</div>
+                <div class="hint">Reported to Sonarr and Radarr as SABnzbd&#39;s complete_dir.</div>
+            </div>
+            <div class="field">
+                <label>Playlist directory</label>
+                <input @bind="settings.PlaylistPath" />
+                <div class="hint">Where local .m3u files live, and all the file picker will list.</div>
             </div>
             <div class="field">
                 <label>Max simultaneous downloads</label>
@@ -592,6 +597,7 @@ else
         ApiKey = source.ApiKey,
         IncompletePath = source.IncompletePath,
         CompletePath = source.CompletePath,
+        PlaylistPath = source.PlaylistPath,
         MaxConcurrentDownloads = source.MaxConcurrentDownloads,
         ManualSpeedLimitKibps = source.ManualSpeedLimitKibps,
         SearchHistoryRetentionDays = source.SearchHistoryRetentionDays,

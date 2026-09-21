@@ -75,6 +75,10 @@ To add local `.m3u` files as a playlist source, uncomment the `/playlists` line 
 `docker-compose.yml` and set `PLAYLISTS_PATH` to the directory holding them. Remote playlist
 URLs need nothing mounted.
 
+That folder is what the **Browse** button on a local playlist lists, and the only folder it
+will list: the picker is confined to it, so nothing else in the container can be enumerated
+from the web UI. Point it elsewhere with **Playlist directory** under Settings → Downloads.
+
 ## Connecting the *arr apps
 
 Three things have to be true: the *arr apps can reach Smurfm3u, Prowlarr is pointed at the
@@ -241,7 +245,7 @@ Add them under **Playlists**. Each one has:
 
 | Option | What it does |
 | --- | --- |
-| Type / Location | A remote URL, or a path to a file mounted into `/playlists` (that mount is commented out by default) |
+| Type / Location | A remote URL, or a local file. **Browse** lists the playlist directory so the path does not have to be typed |
 | Enabled | Disabled playlists are ignored by search and by the scheduler |
 | Quality / resolution / group tags | Appended to every release name from this playlist, e.g. `…1080p.WEB-DL-Smurfm3u`. The resolution tag also picks the Newznab subcategory |
 | Simultaneous downloads | Per-playlist cap, under the global cap in Settings |

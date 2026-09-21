@@ -36,6 +36,7 @@ builder.Services.AddScoped<FileDownloader>();
 builder.Services.AddScoped<DatabaseInitializer>();
 builder.Services.AddScoped<StartupRecoveryService>();
 builder.Services.AddScoped<SearchHistoryService>();
+builder.Services.AddScoped<PlaylistBrowser>();
 
 builder.Services.AddHostedService<DownloadWorker>();
 builder.Services.AddHostedService<RefreshScheduler>();

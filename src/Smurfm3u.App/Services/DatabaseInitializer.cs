@@ -61,7 +61,7 @@ public class DatabaseInitializer(
     {
         var settings = await settingsService.GetAsync(ct);
 
-        foreach (var path in new[] { settings.IncompletePath, settings.CompletePath })
+        foreach (var path in new[] { settings.IncompletePath, settings.CompletePath, settings.PlaylistPath })
         {
             try
             {
