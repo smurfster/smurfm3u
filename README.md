@@ -33,7 +33,7 @@ On first run the app creates its schema, an `admin` account and an API key. If y
 set them in the environment, both are generated and written to the log:
 
 ```bash
-docker compose logs app | grep -E "API key|generated password"
+docker compose logs smurfm3uapp | grep -E "API key|generated password"
 ```
 
 Set them up front instead by creating a `.env` beside `docker-compose.yml`:

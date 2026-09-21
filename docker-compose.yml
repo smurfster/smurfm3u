@@ -1,5 +1,5 @@
 services:
-  db:
+  smurfm3udb:
     image: postgres:17-alpine
     container_name: smurfm3u-db
     restart: unless-stopped
@@ -16,7 +16,7 @@ services:
       timeout: 5s
       retries: 5
 
-  app:
+  smurfm3uapp:
     build:
       context: .
       dockerfile: Dockerfile
@@ -24,10 +24,10 @@ services:
     container_name: smurfm3u
     restart: unless-stopped
     depends_on:
-      db:
+      smurfm3udb:
         condition: service_healthy
     environment:
-      ConnectionStrings__Default: "Host=db;Port=5432;Database=smurfm3u;Username=smurfm3u;Password=${POSTGRES_PASSWORD:-smurfm3u}"
+      ConnectionStrings__Default: "Host=smurfm3udb;Port=5432;Database=smurfm3u;Username=smurfm3u;Password=${POSTGRES_PASSWORD:-smurfm3u}"
       # Leave these unset to have a password and API key generated and written to the log
       # on first run. Once the database exists they are ignored.
       Bootstrap__AdminUsername: ${ADMIN_USERNAME:-admin}
