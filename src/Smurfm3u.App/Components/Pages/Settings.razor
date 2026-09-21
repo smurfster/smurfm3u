@@ -84,16 +84,19 @@ else
         <div class="field-grid">
             <div class="field">
                 <label>Incomplete directory</label>
-                <input @bind="settings.IncompletePath" />
+                <PathPicker Value="settings.IncompletePath" FoldersOnly="true" Fallback="/downloads"
+                            ValueChanged="v => settings.IncompletePath = v" />
             </div>
             <div class="field">
                 <label>Complete directory</label>
-                <input @bind="settings.CompletePath" />
+                <PathPicker Value="settings.CompletePath" FoldersOnly="true" Fallback="/downloads"
+                            ValueChanged="v => settings.CompletePath = v" />
                 <div class="hint">Reported to Sonarr and Radarr as SABnzbd&#39;s complete_dir.</div>
             </div>
             <div class="field">
                 <label>Playlist directory</label>
-                <input @bind="settings.PlaylistPath" />
+                <PathPicker Value="settings.PlaylistPath" FoldersOnly="true" Fallback="/playlists"
+                            ValueChanged="v => settings.PlaylistPath = v" />
                 <div class="hint">Where local .m3u files live, and all the file picker will list.</div>
             </div>
             <div class="field">
@@ -144,7 +147,11 @@ else
                 @foreach (var mapping in settings.PathMappings)
                 {
                     <tr>
-                        <td><input class="mono" @bind="mapping.From" placeholder="/downloads/complete" /></td>
+                        <td>
+                            <PathPicker Value="mapping.From" FoldersOnly="true" Fallback="/downloads"
+                                        Placeholder="/downloads/complete"
+                                        ValueChanged="v => mapping.From = v" />
+                        </td>
                         <td><input class="mono" @bind="mapping.To" placeholder="/mnt/smurfm3u/complete" /></td>
                         <td><button class="small danger" @onclick="() => RemoveMapping(mapping)">Remove</button></td>
                     </tr>

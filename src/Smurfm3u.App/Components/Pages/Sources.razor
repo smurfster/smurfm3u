@@ -7,7 +7,7 @@
 @rendermode InteractiveServer
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject M3uRefreshService Refresher
-@inject PlaylistBrowser Browser
+@inject SettingsService SettingsStore
 @inject IServiceScopeFactory ScopeFactory
 
 <PageTitle>Playlists - Smurfm3u</PageTitle>
@@ -53,12 +53,9 @@
 
                 @if (editing.Kind == M3uSourceKind.Local)
                 {
-                    <div class="actions">
-                        <InputText @bind-Value="editing.Location" />
-                        <button type="button" @onclick="ToggleBrowserAsync">
-                            @(browsing is null ? "Browse" : "Close")
-                        </button>
-                    </div>
+                    <PathPicker Value="editing.Location" Extensions="PlaylistExtensions"
+                                Fallback="@playlistFallback" Placeholder="/playlists/vod.m3u"
+                                ValueChanged="v => editing.Location = v" />
                 }
                 else
                 {
@@ -67,66 +64,11 @@
 
                 <div class="hint">
                     @(editing.Kind == M3uSourceKind.Local
-                        ? "For example /playlists/vod.m3u, mounted as a volume. Browse lists that folder."
-                        : "The provider's get.php or .m3u8 link.")
+                        ? "Any path the container can read. Browse opens where this one points."
+                        : "The provider&#39;s get.php or .m3u8 link.")
                 </div>
                 <ValidationMessage For="() => editing.Location" class="validation-message" />
             </div>
-
-            @if (editing.Kind == M3uSourceKind.Local && browsing is not null)
-            {
-                <div class="card browser">
-                    <div class="actions" style="justify-content:space-between">
-                        <span class="mono">@(string.IsNullOrEmpty(browsing.RelativePath) ? "/" : browsing.RelativePath)</span>
-                        @if (browsing.Parent is not null)
-                        {
-                            <button type="button" class="small" @onclick="() => BrowseAsync(browsing.Parent)">Up</button>
-                        }
-                    </div>
-
-                    @if (browsing.Error is { Length: > 0 } error)
-                    {
-                        <p class="muted">@error</p>
-                    }
-                    else if (browsing.Entries.Count == 0)
-                    {
-                        <p class="muted">
-                            No .m3u or .m3u8 files here.
-                            @if (string.IsNullOrEmpty(browsing.RelativePath))
-                            {
-                                <text>
-                                    Mount a folder of playlists over this path in docker-compose.yml,
-                                    or point the playlist directory somewhere else in Settings.
-                                </text>
-                            }
-                        </p>
-                    }
-                    else
-                    {
-                        <table>
-                            <tbody>
-                            @foreach (var entry in browsing.Entries)
-                            {
-                                <tr>
-                                    <td>
-                                        <button type="button" class="link-button"
-                                                @onclick="() => PickAsync(entry)">
-                                            @(entry.IsDirectory ? $"{entry.Name}/" : entry.Name)
-                                        </button>
-                                    </td>
-                                    <td class="numeric muted">
-                                        @(entry.IsDirectory ? "" : SabFormat.Size(entry.SizeBytes))
-                                    </td>
-                                    <td class="muted">
-                                        @(entry.ModifiedAt == default ? "" : entry.ModifiedAt.LocalDateTime.ToString("d MMM yyyy"))
-                                    </td>
-                                </tr>
-                            }
-                            </tbody>
-                        </table>
-                    }
-                </div>
-            }
 
             <div class="field-grid">
                 <div class="field">
@@ -269,12 +211,20 @@ else
 
     private SourceForm? editing;
 
-    /// <summary>Null when the picker is closed; otherwise the folder it is showing.</summary>
-    private BrowseResult? browsing;
+    private static readonly string[] PlaylistExtensions = [".m3u", ".m3u8"];
+
+    /// <summary>Where the picker opens when a new playlist has no path yet.</summary>
+    private string playlistFallback = "/playlists";
+
     private string? message;
     private bool messageIsError;
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        // The picker opens at whichever folder is configured for playlists, not a guess.
+        playlistFallback = (await SettingsStore.GetAsync()).PlaylistPath;
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {
@@ -315,39 +265,11 @@ else
     private void StartAdd()
     {
         editing = new SourceForm();
-        browsing = null;
     }
 
     private void StartEdit(M3uSource source)
     {
         editing = SourceForm.From(source);
-        browsing = null;
-    }
-
-    private async Task ToggleBrowserAsync()
-    {
-        if (browsing is not null)
-        {
-            browsing = null;
-            return;
-        }
-
-        browsing = await Browser.BrowseNearAsync(editing?.Location);
-    }
-
-    private async Task BrowseAsync(string? relative) => browsing = await Browser.BrowseAsync(relative);
-
-    private async Task PickAsync(BrowseEntry entry)
-    {
-        if (entry.IsDirectory)
-        {
-            browsing = await Browser.BrowseAsync(entry.RelativePath);
-            return;
-        }
-
-        // The stored location is the path the refresher opens, so it is the absolute one.
-        if (editing is not null) editing.Location = entry.FullPath;
-        browsing = null;
     }
 
     private async Task SaveAsync()

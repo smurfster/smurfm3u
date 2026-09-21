@@ -75,9 +75,10 @@ To add local `.m3u` files as a playlist source, uncomment the `/playlists` line 
 `docker-compose.yml` and set `PLAYLISTS_PATH` to the directory holding them. Remote playlist
 URLs need nothing mounted.
 
-That folder is what the **Browse** button on a local playlist lists, and the only folder it
-will list: the picker is confined to it, so nothing else in the container can be enumerated
-from the web UI. Point it elsewhere with **Playlist directory** under Settings → Downloads.
+That folder is where the **Browse** button on a local playlist opens, but it is not a
+boundary. Every field that takes a path has a picker, and each browses wherever the container
+can read, because the box beside it already accepts any path typed into it. Change where the
+playlist picker opens with **Playlist directory** under Settings → Downloads.
 
 ## Connecting the *arr apps
 

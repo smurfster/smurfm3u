@@ -1,0 +1,130 @@
+@using Smurfm3u.Core.Models
+
+@* A path box with a folder browser attached, shared by every field that takes a path. *@
+
+<div class="actions">
+    <input class="mono" value="@Value" placeholder="@Placeholder"
+           @onchange="OnTypedAsync" />
+    <button type="button" class="@ButtonClass" @onclick="ToggleAsync">
+        @(listing is null ? "Browse" : "Close")
+    </button>
+</div>
+
+@if (listing is not null)
+{
+    <div class="card browser">
+        <div class="actions" style="justify-content:space-between">
+            <span class="mono">@listing.Path</span>
+            <div class="actions">
+                @if (FoldersOnly)
+                {
+                    <button type="button" class="small" @onclick="UseThisFolderAsync">Use this folder</button>
+                }
+                <button type="button" class="small" @onclick="UpAsync" disabled="@(listing.Parent is null)">Up</button>
+            </div>
+        </div>
+
+        @if (listing.Error is { Length: > 0 } error)
+        {
+            <p class="muted">@error</p>
+        }
+        else if (listing.Items.Count == 0)
+        {
+            <p class="muted">@(FoldersOnly ? "No folders here." : "Nothing here to pick.")</p>
+        }
+        else
+        {
+            <table>
+                <tbody>
+                @foreach (var item in listing.Items)
+                {
+                    <tr>
+                        <td>
+                            <button type="button" class="link-button" @onclick="() => PickAsync(item)">
+                                @(item.IsDirectory ? $"{item.Name}/" : item.Name)
+                            </button>
+                        </td>
+                        <td class="numeric muted">@(item.IsDirectory ? "" : SabFormat.Size(item.SizeBytes))</td>
+                        <td class="muted">
+                            @(item.ModifiedAt == default ? "" : item.ModifiedAt.LocalDateTime.ToString("d MMM yyyy"))
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public string? Value { get; set; }
+
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+
+    /// <summary>Pick a folder rather than a file: no files are listed and a folder is the answer.</summary>
+    [Parameter] public bool FoldersOnly { get; set; }
+
+    /// <summary>Extensions worth offering, e.g. .m3u. Null lists every file.</summary>
+    [Parameter] public IReadOnlyList<string>? Extensions { get; set; }
+
+    /// <summary>Where to open when the field is empty.</summary>
+    [Parameter] public string Fallback { get; set; } = "/";
+
+    [Parameter] public string? Placeholder { get; set; }
+
+    [Parameter] public string ButtonClass { get; set; } = string.Empty;
+
+    private FolderListing? listing;
+
+    private IReadOnlyList<string>? Filter => FoldersOnly ? [] : Extensions;
+
+    private async Task ToggleAsync()
+    {
+        if (listing is not null)
+        {
+            listing = null;
+            return;
+        }
+
+        // Open where the current value already points, so editing a path does not start
+        // again from the root every time.
+        await OpenAsync(FileBrowser.StartingFolderFor(Value, Fallback));
+    }
+
+    private Task UpAsync() => listing?.Parent is { } parent ? OpenAsync(parent) : Task.CompletedTask;
+
+    private Task OpenAsync(string path)
+    {
+        listing = FileBrowser.List(path, Filter);
+        return Task.CompletedTask;
+    }
+
+    private async Task PickAsync(BrowseItem item)
+    {
+        // A folder is somewhere to go; picking it as the answer is what "Use this folder" is
+        // for, so that a folder-only picker can still be navigated.
+        if (item.IsDirectory)
+        {
+            await OpenAsync(item.FullPath);
+            return;
+        }
+
+        await CommitAsync(item.FullPath);
+    }
+
+    private Task UseThisFolderAsync() =>
+        listing is null ? Task.CompletedTask : CommitAsync(listing.Path);
+
+    private async Task CommitAsync(string path)
+    {
+        Value = path;
+        listing = null;
+        await ValueChanged.InvokeAsync(path);
+    }
+
+    private Task OnTypedAsync(ChangeEventArgs e)
+    {
+        Value = e.Value?.ToString() ?? string.Empty;
+        return ValueChanged.InvokeAsync(Value);
+    }
+}
