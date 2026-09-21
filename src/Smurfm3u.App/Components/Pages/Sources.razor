@@ -53,9 +53,8 @@
 
                 @if (editing.Kind == M3uSourceKind.Local)
                 {
-                    <PathPicker Value="editing.Location" Extensions="PlaylistExtensions"
-                                Fallback="@playlistFallback" Placeholder="/playlists/vod.m3u"
-                                ValueChanged="v => editing.Location = v" />
+                    <PathPicker @bind-Value="editing.Location" Extensions="PlaylistExtensions"
+                                Fallback="@playlistFallback" Placeholder="/playlists/vod.m3u" />
                 }
                 else
                 {

@@ -84,19 +84,16 @@ else
         <div class="field-grid">
             <div class="field">
                 <label>Incomplete directory</label>
-                <PathPicker Value="settings.IncompletePath" FoldersOnly="true" Fallback="/downloads"
-                            ValueChanged="v => settings.IncompletePath = v" />
+                <PathPicker @bind-Value="settings.IncompletePath" FoldersOnly="true" Fallback="/downloads" />
             </div>
             <div class="field">
                 <label>Complete directory</label>
-                <PathPicker Value="settings.CompletePath" FoldersOnly="true" Fallback="/downloads"
-                            ValueChanged="v => settings.CompletePath = v" />
+                <PathPicker @bind-Value="settings.CompletePath" FoldersOnly="true" Fallback="/downloads" />
                 <div class="hint">Reported to Sonarr and Radarr as SABnzbd&#39;s complete_dir.</div>
             </div>
             <div class="field">
                 <label>Playlist directory</label>
-                <PathPicker Value="settings.PlaylistPath" FoldersOnly="true" Fallback="/playlists"
-                            ValueChanged="v => settings.PlaylistPath = v" />
+                <PathPicker @bind-Value="settings.PlaylistPath" FoldersOnly="true" Fallback="/playlists" />
                 <div class="hint">Where local .m3u files live, and all the file picker will list.</div>
             </div>
             <div class="field">
@@ -148,9 +145,8 @@ else
                 {
                     <tr>
                         <td>
-                            <PathPicker Value="mapping.From" FoldersOnly="true" Fallback="/downloads"
-                                        Placeholder="/downloads/complete"
-                                        ValueChanged="v => mapping.From = v" />
+                            <PathPicker @bind-Value="mapping.From" FoldersOnly="true" Fallback="/downloads"
+                                        Placeholder="/downloads/complete" />
                         </td>
                         <td><input class="mono" @bind="mapping.To" placeholder="/mnt/smurfm3u/complete" /></td>
                         <td><button class="small danger" @onclick="() => RemoveMapping(mapping)">Remove</button></td>
