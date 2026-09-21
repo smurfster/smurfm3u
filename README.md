@@ -181,16 +181,32 @@ on those indexers too.
 Smurfm3u reports its completed folder as `/downloads/complete`, with a subfolder per
 category, so a finished TV grab lands in `/downloads/complete/tv/<Release.Name>/`.
 
-Sonarr and Radarr have to be able to read that themselves:
+Sonarr and Radarr have to be able to read that themselves. There are two parts to this, and
+they are easy to confuse: the files must be **reachable**, and the path must **match**.
 
-- **Same host** — mount the same directory into every container at the same path. Nothing
-  else is needed.
-- **Different host** — share the directory over SMB or NFS, mount it on the *arr host, then
-  add a **Remote Path Mapping**: Host is the Smurfm3u address, Remote Path is
-  `/downloads/complete/`, Local Path is wherever you mounted it.
+**Reachable** — if the *arr app runs on the same host, mount the same directory into every
+container. If it runs elsewhere, share the directory over SMB or NFS and mount it there.
+Nothing below substitutes for this: no amount of path rewriting grants access to files an
+app cannot open.
 
-A Remote Path Mapping only rewrites the path in the message; it cannot grant access. Without
-real access, downloads finish and imports fail.
+**Matching** — if that mount lands somewhere other than `/downloads/complete`, tell Smurfm3u
+under **Settings → Path mappings**:
+
+| Our path | As Sonarr and Radarr see it |
+| --- | --- |
+| `/downloads/complete` | `/mnt/smurfm3u/complete` |
+
+Every path handed to a client is then rewritten, so a finished grab is reported at
+`/mnt/smurfm3u/complete/tv/<Release.Name>/` and imports without either app needing its own
+Remote Path Mapping. Where the files are actually written never changes.
+
+Add a row per location that differs. The longest match wins, so a mapping for a subfolder
+beats one for its parent, and a path only matches on a whole folder name — `/downloads` will
+not match `/downloads-old`. If the target is a Windows path the separators follow it, so
+`D:\media\complete` yields `D:\media\complete\tv\Show`.
+
+You can still use each app's own Remote Path Mapping instead if you prefer; doing it here
+just means configuring it once rather than in every app.
 
 ### Good to know
 
@@ -212,7 +228,7 @@ naming, covered below.
 | Grabs fail about half the time | Those grabs went to a real SABnzbd | Steps 3 and 4 |
 | `This nzb did not come from Smurfm3u` | A real Usenet nzb was sent to Smurfm3u | Step 3, Client Priority |
 | `No such item` | The playlist entry is gone, or the database was reset | Search again and re-grab |
-| Downloads finish but never import | The *arr app cannot read the completed folder | Step 5 |
+| Downloads finish but never import | The *arr app cannot reach the completed folder, or sees it at a different path | Step 5 |
 
 ## Playlists
 

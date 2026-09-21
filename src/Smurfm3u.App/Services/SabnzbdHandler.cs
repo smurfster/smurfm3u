@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Smurfm3u.Core.Entities;
+using Smurfm3u.Core.Options;
 using Smurfm3u.Data;
 
 namespace Smurfm3u.App.Services;
@@ -84,8 +85,10 @@ public class SabnzbdHandler(
             {
                 misc = new
                 {
-                    complete_dir = settings.CompletePath,
-                    download_dir = settings.IncompletePath,
+                    // Reported through the path mappings: the client has to be told where it
+                    // sees these files, not where we do.
+                    complete_dir = PathMapper.Apply(settings.CompletePath, settings.PathMappings),
+                    download_dir = PathMapper.Apply(settings.IncompletePath, settings.PathMappings),
                     pre_check = 0,
                     history_retention = "0",
                     // Our own naming is already what the clients want, so SAB-side sorting stays off.
@@ -266,6 +269,8 @@ public class SabnzbdHandler(
         }
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var settings = await settingsService.GetAsync(ct);
+
         var rows = await db.Downloads
             .AsNoTracking()
             .Where(x => x.Status == DownloadStatus.Completed
@@ -288,8 +293,9 @@ public class SabnzbdHandler(
             url = string.Empty,
             status = StatusName(row.Status),
             nzo_id = row.NzoId,
-            storage = row.CompletedPath ?? string.Empty,
-            path = row.CompletedPath ?? string.Empty,
+            // Where the client will find the finished folder, which is what it imports from.
+            storage = PathMapper.Apply(row.CompletedPath, settings.PathMappings),
+            path = PathMapper.Apply(row.CompletedPath, settings.PathMappings),
             script_log = string.Empty,
             script_line = string.Empty,
             download_time = (long)((row.CompletedAt ?? row.QueuedAt) - (row.StartedAt ?? row.QueuedAt)).TotalSeconds,

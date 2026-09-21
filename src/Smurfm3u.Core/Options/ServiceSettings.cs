@@ -15,6 +15,12 @@ public class ServiceSettings
     /// <summary>Where finished downloads are moved for the *arr apps to import.</summary>
     public string CompletePath { get; set; } = "/downloads/complete";
 
+    /// <summary>
+    /// Rewrites the paths reported to Sonarr and Radarr when they see the same files
+    /// somewhere else. Empty means they see what we see, which needs no mapping.
+    /// </summary>
+    public List<PathMapping> PathMappings { get; set; } = [];
+
     /// <summary>Ceiling across all sources; each source also has its own cap.</summary>
     public int MaxConcurrentDownloads { get; set; } = 3;
 

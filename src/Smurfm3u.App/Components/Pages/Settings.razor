@@ -116,6 +116,51 @@ else
     </div>
 
     <div class="card">
+        <h2 style="margin-top:0">Path mappings</h2>
+        <p class="hint" style="margin-top:0">
+            Only needed when Sonarr and Radarr see the finished files somewhere other than the
+            directories above &mdash; a different mount point, or a network share. The paths we
+            report are rewritten; nothing changes about where downloads are actually written.
+            Leave this empty if every app sees the same paths.
+        </p>
+
+        @if (settings.PathMappings.Count > 0)
+        {
+            <table>
+                <thead>
+                <tr>
+                    <th>Our path</th>
+                    <th>As Sonarr and Radarr see it</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach (var mapping in settings.PathMappings)
+                {
+                    <tr>
+                        <td><input class="mono" @bind="mapping.From" placeholder="/downloads/complete" /></td>
+                        <td><input class="mono" @bind="mapping.To" placeholder="/mnt/smurfm3u/complete" /></td>
+                        <td><button class="small danger" @onclick="() => RemoveMapping(mapping)">Remove</button></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+            <div class="hint">
+                The longest matching path wins, and a path only matches on a whole folder name.
+                A mapping with either side left blank is dropped when you save.
+            </div>
+        }
+        else
+        {
+            <p class="muted">No mappings. Paths are reported exactly as they are above.</p>
+        }
+
+        <div class="actions" style="margin-top:.75rem">
+            <button @onclick="AddMapping">Add mapping</button>
+        </div>
+    </div>
+
+    <div class="card">
         <h2 style="margin-top:0">Search results</h2>
 
         <div class="field-grid">
@@ -294,6 +339,16 @@ else
         settings.SearchHistoryRetentionDays = Math.Max(0, settings.SearchHistoryRetentionDays);
         settings.DownloadHistoryRetentionDays = Math.Max(0, settings.DownloadHistoryRetentionDays);
 
+        // A half-filled row would silently do nothing, so it is dropped rather than stored.
+        settings.PathMappings.RemoveAll(m =>
+            string.IsNullOrWhiteSpace(m.From) || string.IsNullOrWhiteSpace(m.To));
+
+        foreach (var mapping in settings.PathMappings)
+        {
+            mapping.From = mapping.From.Trim();
+            mapping.To = mapping.To.Trim();
+        }
+
         await SettingsStore.SaveAsync(settings);
 
         await using (var db = await DbFactory.CreateDbContextAsync())
@@ -329,6 +384,16 @@ else
 
         SetMessage("New API key generated. Update Prowlarr, Sonarr and Radarr with it.", isError: false);
     }
+
+    private void AddMapping()
+    {
+        if (settings is null) return;
+
+        // Seeded with the completed directory, because that is the one an import needs.
+        settings.PathMappings.Add(new PathMapping { From = settings.CompletePath, To = string.Empty });
+    }
+
+    private void RemoveMapping(PathMapping mapping) => settings?.PathMappings.Remove(mapping);
 
     private void AddWindow() => windows.Add(new SpeedLimitWindow
     {
@@ -410,6 +475,10 @@ else
         AssumedBitrateKbps = source.AssumedBitrateKbps,
         FallbackSizeMib = source.FallbackSizeMib,
         MaxDownloadAttempts = source.MaxDownloadAttempts,
-        DeleteFailedFiles = source.DeleteFailedFiles
+        DeleteFailedFiles = source.DeleteFailedFiles,
+        // Copied element by element, or an abandoned edit would mutate the cached settings.
+        PathMappings = source.PathMappings
+            .Select(m => new PathMapping { From = m.From, To = m.To })
+            .ToList()
     };
 }
