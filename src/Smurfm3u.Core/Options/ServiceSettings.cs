@@ -53,6 +53,13 @@ public class ServiceSettings
     public bool RelaxedSearchFallback { get; set; } = true;
 
     /// <summary>
+    /// How many entries an empty query exposes. Clients keep asking for the next page until a
+    /// short one comes back, so an uncapped browse walks the whole catalogue one page at a
+    /// time. 0 removes the cap and restores that.
+    /// </summary>
+    public int RssFeedLimit { get; set; } = 100;
+
+    /// <summary>
     /// Used to estimate release size when the playlist does not declare one.
     /// The *arrs reject zero-byte releases and use size to pick between them.
     /// </summary>

@@ -223,6 +223,12 @@ Both APIs answer on `/api`. A SABnzbd request always carries a `mode` parameter 
 Newznab request never does, which is what tells them apart — so neither app needs a custom
 URL base. `/newznab/api` and `/sabnzbd/api` are also routed if you would rather be explicit.
 
+An empty query is a feed of the newest entries rather than a result set to be walked. Its
+size is capped by **Browse feed size** under Settings (100 by default), because Prowlarr
+keeps asking for the next page until a short one comes back: uncapped, one RSS sync costs a
+request every two seconds until it hits its own thirty-page ceiling. Set it to 0 to remove
+the cap. A real query is unaffected and pages as far as the client wants.
+
 Searches are text-only. Smurfm3u has no TVDB or IMDb mapping and does not claim to, so the
 *arr apps match on title, year, season and episode. How well that works depends on release
 naming, covered below.

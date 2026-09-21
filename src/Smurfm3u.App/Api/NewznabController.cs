@@ -110,13 +110,23 @@ public class NewznabController(
     {
         var started = Stopwatch.GetTimestamp();
         var categories = ParseCategories(cat);
+        var settings = await settingsService.GetAsync(ct);
 
-        var request = new SearchRequest(kind, q, season, ep, categories, offset, limit);
+        // An empty query is a feed of what is newest, not a result set to be walked. Clients
+        // keep asking for the next page until a short one comes back, so leaving this
+        // uncapped costs a round trip every couple of seconds until they hit their own page
+        // ceiling, fetching entries nobody asked for.
+        var feedCap = string.IsNullOrWhiteSpace(q) ? settings.RssFeedLimit : 0;
+        var honoured = feedCap > 0 ? Math.Clamp(feedCap - offset, 0, limit) : limit;
 
-        var results = await search.SearchAsync(request, ct);
+        var results = honoured <= 0
+            ? SearchResults.Empty
+            : await search.SearchAsync(
+                new SearchRequest(kind, q, season, ep, categories, offset, honoured), ct);
+
         var hits = results.Hits;
-        var total = results.Total;
-        var apiKey = (await settingsService.GetAsync(ct)).ApiKey;
+        var total = feedCap > 0 ? Math.Min(results.Total, feedCap) : results.Total;
+        var apiKey = settings.ApiKey;
 
         await RecordSearchAsync(
             kind, q, season, ep, cat, offset, limit, hits.Count, results.Relaxed,

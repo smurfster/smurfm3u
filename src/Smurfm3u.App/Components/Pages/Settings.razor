@@ -175,6 +175,15 @@ else
                 <input type="number" @bind="settings.MaxSearchResults" />
             </div>
             <div class="field">
+                <label>Browse feed size</label>
+                <input type="number" @bind="settings.RssFeedLimit" />
+                <div class="hint">
+                    How many entries an empty query exposes. Prowlarr keeps asking for the next
+                    page until a short one comes back, so a low number here is one sync instead
+                    of thirty. 0 removes the cap.
+                </div>
+            </div>
+            <div class="field">
                 <label>Assumed bitrate (kbps)</label>
                 <input type="number" @bind="settings.AssumedBitrateKbps" />
                 <div class="hint">Used with the runtime to estimate release size.</div>
@@ -428,6 +437,7 @@ else
         settings.MaxConcurrentDownloads = Math.Clamp(settings.MaxConcurrentDownloads, 1, 100);
         settings.MaxDownloadAttempts = Math.Clamp(settings.MaxDownloadAttempts, 1, 20);
         settings.MaxSearchResults = Math.Clamp(settings.MaxSearchResults, 1, 1000);
+        settings.RssFeedLimit = Math.Max(0, settings.RssFeedLimit);
         settings.ManualSpeedLimitKibps = Math.Max(0, settings.ManualSpeedLimitKibps);
         settings.SearchHistoryRetentionDays = Math.Max(0, settings.SearchHistoryRetentionDays);
         settings.DownloadHistoryRetentionDays = Math.Max(0, settings.DownloadHistoryRetentionDays);
@@ -605,6 +615,7 @@ else
         TvCategory = source.TvCategory,
         MovieCategory = source.MovieCategory,
         MaxSearchResults = source.MaxSearchResults,
+        RssFeedLimit = source.RssFeedLimit,
         RelaxedSearchFallback = source.RelaxedSearchFallback,
         AssumedBitrateKbps = source.AssumedBitrateKbps,
         FallbackSizeMib = source.FallbackSizeMib,
