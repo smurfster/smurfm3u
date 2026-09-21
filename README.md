@@ -47,7 +47,28 @@ HTTP_PORT=8090
 TZ=Europe/London
 ```
 
-These seed the database on first run only. Afterwards the UI is the source of truth.
+The account and API key settings seed the database on first run only. Afterwards the UI is
+the source of truth.
+
+### Where the data lives
+
+By default everything is kept under `./data` beside `docker-compose.yml`. Point any of the
+three somewhere else — another disk, a NAS mount — with a `.env` entry:
+
+| Variable | Default | Holds |
+| --- | --- | --- |
+| `DOWNLOADS_PATH` | `./data/downloads` | Completed and in-progress downloads |
+| `CONFIG_PATH` | `./data/config` | Data protection keys, so a rebuild does not sign everyone out |
+| `PLAYLISTS_PATH` | `./data/playlists` | Local `.m3u` files you want to add as a source |
+
+```env
+DOWNLOADS_PATH=/mnt/media/smurfm3u
+```
+
+A relative path must start with `./` or `../`, which is Compose's rule rather than ours.
+Only the host side moves: inside the container these stay at `/downloads`, `/config` and
+`/playlists`, because that is what the app is configured with and what it reports to Sonarr
+and Radarr.
 
 ## Connecting the *arr apps
 

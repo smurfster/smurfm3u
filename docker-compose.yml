@@ -37,13 +37,15 @@ services:
     ports:
       - "${HTTP_PORT:-8090}:8080"
     volumes:
+      # Only the host side is configurable; the container paths are what the app is
+      # configured with and what it reports to Sonarr and Radarr.
       # Sonarr and Radarr must see the completed downloads at the same path they do here,
       # or you will need a remote path mapping in those apps.
-      - ./data/downloads:/downloads
+      - ${DOWNLOADS_PATH:-./data/downloads}:/downloads
       # Data protection keys, so a rebuild does not sign everyone out.
-      - ./data/config:/config
+      - ${CONFIG_PATH:-./data/config}:/config
       # Any local .m3u files you want to add as a playlist source.
-      - ./data/playlists:/playlists
+      - ${PLAYLISTS_PATH:-./data/playlists}:/playlists
 
 volumes:
   db-data:
