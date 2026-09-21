@@ -1,58 +1,73 @@
 @using Smurfm3u.Core.Models
 
-@* A path box with a folder browser attached, shared by every field that takes a path. *@
+@* A path box with a folder browser behind it. The browser opens over the page rather than
+   inside the form, so it has room to list and cannot push the layout around. *@
 
 <div class="actions">
-    <input class="mono" value="@Value" placeholder="@Placeholder"
-           @onchange="OnTypedAsync" />
-    <button type="button" class="@ButtonClass" @onclick="ToggleAsync">
-        @(listing is null ? "Browse" : "Close")
-    </button>
+    <input class="mono" value="@Value" placeholder="@Placeholder" @onchange="OnTypedAsync" />
+    <button type="button" class="@ButtonClass" @onclick="OpenAsync">Browse</button>
 </div>
 
 @if (listing is not null)
 {
-    <div class="card browser">
-        <div class="actions" style="justify-content:space-between">
-            <span class="mono">@listing.Path</span>
-            <div class="actions">
-                @if (FoldersOnly)
+    <div class="modal-backdrop" @onclick="Close">
+        @* Clicks inside the dialog are not clicks on the backdrop. *@
+        <div class="modal" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <strong>@(FoldersOnly ? "Choose a folder" : "Choose a file")</strong>
+                <button type="button" class="small" @onclick="Close">Close</button>
+            </div>
+
+            <div class="modal-path">
+                <button type="button" class="small" @onclick="UpAsync" disabled="@(listing.Parent is null)">
+                    &uarr; Up
+                </button>
+                <span class="mono">@listing.Path</span>
+            </div>
+
+            <div class="modal-body">
+                @if (listing.Error is { Length: > 0 } error)
                 {
-                    <button type="button" class="small" @onclick="UseThisFolderAsync">Use this folder</button>
+                    <p class="muted">@error</p>
                 }
-                <button type="button" class="small" @onclick="UpAsync" disabled="@(listing.Parent is null)">Up</button>
+                else if (listing.Items.Count == 0)
+                {
+                    <p class="muted">@(FoldersOnly ? "No folders here." : "Nothing here to pick.")</p>
+                }
+                else
+                {
+                    <table>
+                        <tbody>
+                        @foreach (var item in listing.Items)
+                        {
+                            <tr>
+                                <td>
+                                    <button type="button" class="link-button" @onclick="() => PickAsync(item)">
+                                        @(item.IsDirectory ? $"{item.Name}/" : item.Name)
+                                    </button>
+                                </td>
+                                <td class="numeric muted">@(item.IsDirectory ? "" : SabFormat.Size(item.SizeBytes))</td>
+                                <td class="muted">
+                                    @(item.ModifiedAt == default ? "" : item.ModifiedAt.LocalDateTime.ToString("d MMM yyyy"))
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                }
+            </div>
+
+            <div class="modal-footer">
+                <span class="muted">@(FoldersOnly ? "Open a folder to step into it." : "Open a folder, or pick a file.")</span>
+                <div class="actions">
+                    @if (FoldersOnly)
+                    {
+                        <button type="button" class="primary" @onclick="UseThisFolderAsync">Use this folder</button>
+                    }
+                    <button type="button" @onclick="Close">Cancel</button>
+                </div>
             </div>
         </div>
-
-        @if (listing.Error is { Length: > 0 } error)
-        {
-            <p class="muted">@error</p>
-        }
-        else if (listing.Items.Count == 0)
-        {
-            <p class="muted">@(FoldersOnly ? "No folders here." : "Nothing here to pick.")</p>
-        }
-        else
-        {
-            <table>
-                <tbody>
-                @foreach (var item in listing.Items)
-                {
-                    <tr>
-                        <td>
-                            <button type="button" class="link-button" @onclick="() => PickAsync(item)">
-                                @(item.IsDirectory ? $"{item.Name}/" : item.Name)
-                            </button>
-                        </td>
-                        <td class="numeric muted">@(item.IsDirectory ? "" : SabFormat.Size(item.SizeBytes))</td>
-                        <td class="muted">
-                            @(item.ModifiedAt == default ? "" : item.ModifiedAt.LocalDateTime.ToString("d MMM yyyy"))
-                        </td>
-                    </tr>
-                }
-                </tbody>
-            </table>
-        }
     </div>
 }
 
@@ -78,34 +93,28 @@
 
     private IReadOnlyList<string>? Filter => FoldersOnly ? [] : Extensions;
 
-    private async Task ToggleAsync()
-    {
-        if (listing is not null)
-        {
-            listing = null;
-            return;
-        }
+    /// <summary>
+    /// Opens where the current value already points, so editing a path does not start again
+    /// from the root every time.
+    /// </summary>
+    private void OpenAsync() => Show(FileBrowser.StartingFolderFor(Value, Fallback));
 
-        // Open where the current value already points, so editing a path does not start
-        // again from the root every time.
-        await OpenAsync(FileBrowser.StartingFolderFor(Value, Fallback));
+    private void Close() => listing = null;
+
+    private void UpAsync()
+    {
+        if (listing?.Parent is { } parent) Show(parent);
     }
 
-    private Task UpAsync() => listing?.Parent is { } parent ? OpenAsync(parent) : Task.CompletedTask;
-
-    private Task OpenAsync(string path)
-    {
-        listing = FileBrowser.List(path, Filter);
-        return Task.CompletedTask;
-    }
+    private void Show(string path) => listing = FileBrowser.List(path, Filter);
 
     private async Task PickAsync(BrowseItem item)
     {
-        // A folder is somewhere to go; picking it as the answer is what "Use this folder" is
-        // for, so that a folder-only picker can still be navigated.
+        // A folder is somewhere to go. Choosing one as the answer is what "Use this folder"
+        // is for, so that a folder-only picker can still be navigated.
         if (item.IsDirectory)
         {
-            await OpenAsync(item.FullPath);
+            Show(item.FullPath);
             return;
         }
 
