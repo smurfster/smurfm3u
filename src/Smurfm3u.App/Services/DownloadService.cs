@@ -15,6 +15,7 @@ public class DownloadService(
     DownloadManager manager,
     SettingsService settingsService,
     TimeProvider clock,
+    NotificationService notifications,
     ILogger<DownloadService> logger)
 {
     /// <summary>Adds a playlist entry to the queue and returns the nzo id the client will track it by.</summary>
@@ -50,6 +51,14 @@ public class DownloadService(
         await db.SaveChangesAsync(ct);
 
         logger.LogInformation("Queued {Name} as {NzoId}", download.Name, download.NzoId);
+
+        notifications.Notify(Core.Options.NotificationEvent.DownloadQueued, download.Name,
+        [
+            new("Category", download.Category),
+            new("Playlist", item.Source?.Name),
+            new("Size", Core.Options.NotificationComposer.FormatBytes(download.TotalBytes))
+        ]);
+
         return download;
     }
 

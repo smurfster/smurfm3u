@@ -11,6 +11,7 @@
 @inject IDbContextFactory<AppDbContext> DbFactory
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthState
+@inject NotificationService Notifications
 
 <PageTitle>Settings - Smurfm3u</PageTitle>
 
@@ -112,6 +113,78 @@ else
         <div class="field inline-field">
             <input type="checkbox" id="deleteFailed" @bind="settings.DeleteFailedFiles" />
             <label for="deleteFailed" style="margin:0">Delete partial files when a download fails for good</label>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 style="margin-top:0">Notifications</h2>
+
+        <div class="field inline-field">
+            <input type="checkbox" id="notifyEnabled" @bind="settings.Notifications.Enabled" />
+            <label for="notifyEnabled" style="margin:0">Send notifications over SMTP</label>
+        </div>
+
+        <div class="field">
+            <label>Send on</label>
+            <div class="actions">
+                @foreach (var kind in NotificationKinds)
+                {
+                    <label class="inline-field" style="gap:.25rem">
+                        <input type="checkbox"
+                               checked="@settings.Notifications.Events.Contains(kind)"
+                               @onchange="e => ToggleEvent(kind, e)" />
+                        <span class="muted" style="font-size:.8rem">@NotificationComposer.Describe(kind)</span>
+                    </label>
+                }
+            </div>
+            <div class="hint">
+                Queued and started fire on every grab, so they are noisy on a busy instance.
+                A failed download notifies once it has given up, not once per retry.
+            </div>
+        </div>
+
+        <div class="field-grid">
+            <div class="field">
+                <label>SMTP server</label>
+                <input @bind="settings.Notifications.Smtp.Host" placeholder="smtp.example.com" />
+            </div>
+            <div class="field">
+                <label>Port</label>
+                <input type="number" @bind="settings.Notifications.Smtp.Port" />
+                <div class="hint">587 for STARTTLS, 465 for implicit TLS, 25 for a plain relay.</div>
+            </div>
+            <div class="field">
+                <label>Username</label>
+                <input @bind="settings.Notifications.Smtp.Username" />
+                <div class="hint">Leave blank for a relay that needs no login.</div>
+            </div>
+            <div class="field">
+                <label>Password</label>
+                <input type="password" @bind="settings.Notifications.Smtp.Password" />
+            </div>
+            <div class="field">
+                <label>From</label>
+                <input @bind="settings.Notifications.Smtp.FromAddress" placeholder="smurfm3u@@example.com" />
+            </div>
+            <div class="field">
+                <label>To</label>
+                <input @bind="settings.Notifications.Smtp.ToAddresses" placeholder="me@@example.com" />
+                <div class="hint">Several addresses may be separated by commas.</div>
+            </div>
+        </div>
+
+        <div class="field inline-field">
+            <input type="checkbox" id="notifyImplicitTls" @bind="settings.Notifications.Smtp.UseImplicitTls" />
+            <label for="notifyImplicitTls" style="margin:0">
+                Implicit TLS (port 465). Leave off for STARTTLS, which is used when the server offers it.
+            </label>
+        </div>
+
+        <div class="actions" style="margin-top:.75rem">
+            <button @onclick="SendTestNotificationAsync" disabled="@sendingTest">
+                @(sendingTest ? "Sending..." : "Send test")
+            </button>
+            <span class="muted" style="font-size:.8rem">Uses what is on screen; no need to save first.</span>
         </div>
     </div>
 
@@ -385,6 +458,45 @@ else
         SetMessage("New API key generated. Update Prowlarr, Sonarr and Radarr with it.", isError: false);
     }
 
+    private static readonly NotificationEvent[] NotificationKinds = Enum.GetValues<NotificationEvent>();
+
+    private bool sendingTest;
+
+    private void ToggleEvent(NotificationEvent kind, ChangeEventArgs e)
+    {
+        if (settings is null) return;
+
+        if (e.Value is true)
+        {
+            if (!settings.Notifications.Events.Contains(kind))
+                settings.Notifications.Events.Add(kind);
+        }
+        else
+        {
+            settings.Notifications.Events.Remove(kind);
+        }
+    }
+
+    private async Task SendTestNotificationAsync()
+    {
+        if (settings is null) return;
+
+        sendingTest = true;
+        try
+        {
+            var error = await Notifications.SendTestAsync(settings.Notifications);
+
+            if (error is null)
+                SetMessage("Test notification sent.", isError: false);
+            else
+                SetMessage($"Test notification failed: {error}", isError: true);
+        }
+        finally
+        {
+            sendingTest = false;
+        }
+    }
+
     private void AddMapping()
     {
         if (settings is null) return;
@@ -476,6 +588,23 @@ else
         FallbackSizeMib = source.FallbackSizeMib,
         MaxDownloadAttempts = source.MaxDownloadAttempts,
         DeleteFailedFiles = source.DeleteFailedFiles,
+        // Deep-copied for the same reason as the mappings: an abandoned edit must not
+        // reach the cached settings, and this subtree holds credentials.
+        Notifications = new NotificationSettings
+        {
+            Enabled = source.Notifications.Enabled,
+            Events = [..source.Notifications.Events],
+            Smtp = new SmtpSettings
+            {
+                Host = source.Notifications.Smtp.Host,
+                Port = source.Notifications.Smtp.Port,
+                UseImplicitTls = source.Notifications.Smtp.UseImplicitTls,
+                Username = source.Notifications.Smtp.Username,
+                Password = source.Notifications.Smtp.Password,
+                FromAddress = source.Notifications.Smtp.FromAddress,
+                ToAddresses = source.Notifications.Smtp.ToAddresses
+            }
+        },
         // Copied element by element, or an abandoned edit would mutate the cached settings.
         PathMappings = source.PathMappings
             .Select(m => new PathMapping { From = m.From, To = m.To })

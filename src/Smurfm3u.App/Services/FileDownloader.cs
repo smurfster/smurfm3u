@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using Microsoft.EntityFrameworkCore;
 using Smurfm3u.Core.Entities;
+using Smurfm3u.Core.Options;
 using Smurfm3u.Core.Parsing;
 using Smurfm3u.Data;
 
@@ -18,6 +19,7 @@ public class FileDownloader(
     SpeedLimitService speedLimits,
     SettingsService settingsService,
     TimeProvider clock,
+    NotificationService notifications,
     ILogger<FileDownloader> logger)
 {
     private const int BufferSize = 128 * 1024;
@@ -54,6 +56,17 @@ public class FileDownloader(
             download.IncompletePath = incompleteFile;
             await db.SaveChangesAsync(CancellationToken.None);
 
+            // Only on the first attempt: a resume after a restart is not a new start.
+            if (download.AttemptCount == 0)
+            {
+                notifications.Notify(NotificationEvent.DownloadStarted, download.Name,
+                [
+                    new("Category", download.Category),
+                    new("Playlist", download.Source?.Name),
+                    new("Size", NotificationComposer.FormatBytes(download.TotalBytes))
+                ]);
+            }
+
             var completed = await TransferAsync(db, download, handle, incompleteFile, ct);
 
             if (!completed)
@@ -75,6 +88,15 @@ public class FileDownloader(
             await db.SaveChangesAsync(CancellationToken.None);
 
             logger.LogInformation("Completed {Name} into {Path}", download.Name, download.CompletedPath);
+
+            notifications.Notify(NotificationEvent.DownloadCompleted, download.Name,
+            [
+                new("Category", download.Category),
+                new("Playlist", download.Source?.Name),
+                new("Size", NotificationComposer.FormatBytes(download.DownloadedBytes)),
+                new("Took", Describe(download.StartedAt, download.CompletedAt)),
+                new("Folder", download.CompletedPath)
+            ]);
         }
         catch (OperationCanceledException) when (handle.PauseRequested)
         {
@@ -292,6 +314,16 @@ public class FileDownloader(
                 TryDelete(incompleteFile);
                 TryCleanUpFolder(Path.GetDirectoryName(incompleteFile));
             }
+
+            // Only once it has given up. Notifying per attempt would send three of these
+            // for every download that was always going to fail.
+            notifications.Notify(NotificationEvent.DownloadFailed, download.Name,
+            [
+                new("Category", download.Category),
+                new("Playlist", download.Source?.Name),
+                new("Attempts", download.AttemptCount.ToString()),
+                new("Reason", download.FailureMessage)
+            ]);
         }
         else
         {
@@ -300,6 +332,17 @@ public class FileDownloader(
         }
 
         await db.SaveChangesAsync(CancellationToken.None);
+    }
+
+    /// <summary>How long a transfer took, phrased for a notification rather than a log.</summary>
+    private static string Describe(DateTimeOffset? from, DateTimeOffset? to)
+    {
+        if (from is null || to is null) return string.Empty;
+
+        var elapsed = to.Value - from.Value;
+        return elapsed < TimeSpan.FromMinutes(1)
+            ? $"{elapsed.TotalSeconds:0} seconds"
+            : $"{(int)elapsed.TotalHours}h {elapsed.Minutes}m";
     }
 
     private static string BuildIncompletePath(Core.Options.ServiceSettings settings, DownloadItem download)

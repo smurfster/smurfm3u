@@ -24,6 +24,8 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<SettingsService>();
 builder.Services.AddSingleton<DownloadManager>();
 builder.Services.AddSingleton<SpeedLimitService>();
+builder.Services.AddSingleton<SmtpNotifier>();
+builder.Services.AddSingleton<NotificationService>();
 
 builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<DownloadService>();

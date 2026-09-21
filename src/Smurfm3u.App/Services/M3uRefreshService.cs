@@ -19,6 +19,7 @@ public class M3uRefreshService(
     IDbContextFactory<AppDbContext> dbFactory,
     IHttpClientFactory httpClientFactory,
     TimeProvider clock,
+    NotificationService notifications,
     ILogger<M3uRefreshService> logger)
 {
     /// <summary>Rows written per SaveChanges; keeps memory flat on playlists with millions of lines.</summary>
@@ -149,6 +150,12 @@ public class M3uRefreshService(
             failed.LastRefreshStatus = RefreshStatus.Failed;
             failed.LastRefreshError = Truncate(ex.Message, 2000);
             await db.SaveChangesAsync(CancellationToken.None);
+
+            notifications.Notify(Core.Options.NotificationEvent.RefreshFailed, failed.Name,
+            [
+                new("Location", failed.Location),
+                new("Reason", ex.Message)
+            ]);
 
             throw;
         }
