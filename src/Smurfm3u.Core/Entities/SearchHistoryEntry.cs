@@ -29,6 +29,13 @@ public class SearchHistoryEntry
     /// <summary>The words were not all found and the closest entries were returned instead.</summary>
     public bool Relaxed { get; set; }
 
+    /// <summary>
+    /// The playlist entries this query answered with, in the order they were sent. Ids rather
+    /// than names, because a name is rebuilt from the entry and its playlist tags and would
+    /// otherwise be stored a hundred times over.
+    /// </summary>
+    public List<long> ResultItemIds { get; set; } = [];
+
     public string? ClientIp { get; set; }
     public string? UserAgent { get; set; }
 

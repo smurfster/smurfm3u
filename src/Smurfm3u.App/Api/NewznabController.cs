@@ -28,6 +28,9 @@ public class NewznabController(
     private static readonly XNamespace Atom = "http://www.w3.org/2005/Atom";
     private static readonly XNamespace Newznab = "http://www.newznab.com/DTD/2010/feeds/attributes/";
 
+    /// <summary>How many of a query's results are remembered against it.</summary>
+    private const int MaxRecordedResults = 200;
+
     [HttpGet]
     public async Task<IActionResult> Index(
         [FromQuery] string? t,
@@ -129,7 +132,7 @@ public class NewznabController(
         var apiKey = settings.ApiKey;
 
         await RecordSearchAsync(
-            kind, q, season, ep, cat, offset, limit, hits.Count, results.Relaxed,
+            kind, q, season, ep, cat, offset, limit, hits, results.Relaxed,
             Stopwatch.GetElapsedTime(started), ct);
 
         var channel = new XElement("channel",
@@ -222,7 +225,8 @@ public class NewznabController(
 
     private async Task RecordSearchAsync(
         SearchKind kind, string? q, int? season, int? ep, string? cat,
-        int offset, int limit, int resultCount, bool relaxed, TimeSpan elapsed, CancellationToken ct)
+        int offset, int limit, IReadOnlyList<SearchHit> hits, bool relaxed, TimeSpan elapsed,
+        CancellationToken ct)
     {
         try
         {
@@ -237,8 +241,10 @@ public class NewznabController(
                 Categories = cat,
                 Offset = offset,
                 Limit = limit,
-                ResultCount = resultCount,
+                ResultCount = hits.Count,
                 Relaxed = relaxed,
+                // Bounded: a client asking for a huge page should not write a huge row.
+                ResultItemIds = hits.Take(MaxRecordedResults).Select(x => x.Item.Id).ToList(),
                 ElapsedMs = (int)elapsed.TotalMilliseconds,
                 ClientIp = HttpContext.Connection.RemoteIpAddress?.ToString(),
                 UserAgent = Request.Headers.UserAgent.ToString() is { Length: > 0 } ua ? ua : null,

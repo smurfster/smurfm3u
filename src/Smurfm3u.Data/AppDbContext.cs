@@ -92,6 +92,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.ClientIp).HasMaxLength(64);
             e.Property(x => x.UserAgent).HasMaxLength(500);
 
+            // A native array: one column, no join table, and no rows to cascade on delete.
+            e.Property(x => x.ResultItemIds).HasColumnType("bigint[]");
+
             e.HasIndex(x => x.RequestedAt);
         });
 

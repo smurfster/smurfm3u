@@ -441,7 +441,10 @@ accident.
 
 - **Queue** and **History** show downloads; history rows can be retried or deleted.
 - **Searches** records every query the *arr apps send, with result counts and timings, and
-  can delete entries older than a chosen age.
+  can delete entries older than a chosen age. **Results** on a row lists the releases that
+  query actually answered with, so a grab can be traced back to the search that offered it.
+  Names are rebuilt from the playlist rather than stored, so an entry since dropped from
+  every playlist is marked retired instead of disappearing.
 - Both are also trimmed automatically by the retention settings. `0` means keep forever.
 
 ## Layout

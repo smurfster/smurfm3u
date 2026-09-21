@@ -72,9 +72,55 @@ else
                         @ClientLabel(entry)
                     </td>
                     <td>
-                        <button class="small danger" @onclick="() => DeleteAsync(entry.Id)">Delete</button>
+                        <div class="actions">
+                            <button class="small" @onclick="() => ToggleResultsAsync(entry)"
+                                    disabled="@(entry.ResultCount == 0)">
+                                @(expanded == entry.Id ? "Hide" : "Results")
+                            </button>
+                            <button class="small danger" @onclick="() => DeleteAsync(entry.Id)">Delete</button>
+                        </div>
                     </td>
                 </tr>
+
+                @if (expanded == entry.Id)
+                {
+                    <tr>
+                        <td colspan="9" class="result-cell">
+                            @if (results.Count == 0)
+                            {
+                                <span class="muted">
+                                    Nothing was recorded against this search. Only searches answered
+                                    after this was added remember what they returned.
+                                </span>
+                            }
+                            else
+                            {
+                                <ol class="result-list">
+                                    @foreach (var result in results)
+                                    {
+                                        <li>
+                                            <span class="mono @(result.StillListed ? "" : "muted")">@result.ReleaseName</span>
+                                            @if (result.SourceName is { Length: > 0 } playlist)
+                                            {
+                                                <span class="muted"> &mdash; @playlist</span>
+                                            }
+                                            @if (!result.StillListed)
+                                            {
+                                                <span class="pill warn">retired</span>
+                                            }
+                                        </li>
+                                    }
+                                </ol>
+                                @if (results.Count < entry.ResultCount)
+                                {
+                                    <div class="hint">
+                                        Showing the first @results.Count of @entry.ResultCount; only that many are kept.
+                                    </div>
+                                }
+                            }
+                        </td>
+                    </tr>
+                }
             }
             </tbody>
         </table>
@@ -92,6 +138,10 @@ else
     private int page = 1;
     private int pageSize = 50;
     private string? message;
+
+    /// <summary>The one row whose results are open, and the results themselves.</summary>
+    private long? expanded;
+    private IReadOnlyList<RecordedResult> results = [];
 
     protected override Task OnInitializedAsync() => LoadAsync();
 
@@ -130,6 +180,21 @@ else
         pageSize = size;
         page = 1;
         return LoadAsync();
+    }
+
+    private async Task ToggleResultsAsync(SearchHistoryEntry entry)
+    {
+        if (expanded == entry.Id)
+        {
+            expanded = null;
+            results = [];
+            return;
+        }
+
+        // Loaded on demand: a page of fifty searches is thousands of releases nobody asked
+        // to see, and the names have to be rebuilt from their playlists to show them.
+        results = await History.GetResultsAsync(entry.Id);
+        expanded = entry.Id;
     }
 
     private async Task DeleteAsync(long id)
