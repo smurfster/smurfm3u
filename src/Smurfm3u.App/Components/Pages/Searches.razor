@@ -74,43 +74,64 @@ else
         </table>
     </div>
 
-    @if (entries.Count < total)
-    {
-        <div style="margin-top:.75rem">
-            <button @onclick="LoadMoreAsync">Load more</button>
-        </div>
-    }
+    <Pager Page="page" PageSize="pageSize" TotalCount="total"
+           PageChanged="GoToPageAsync" PageSizeChanged="SetPageSizeAsync" />
 }
 
 @code {
-    private const int PageSize = 50;
-
     private readonly List<SearchHistoryEntry> entries = [];
     private string filter = string.Empty;
     private int pruneDays = 30;
     private int total;
+    private int page = 1;
+    private int pageSize = 50;
     private string? message;
 
-    protected override Task OnInitializedAsync() => ReloadAsync();
+    protected override Task OnInitializedAsync() => LoadAsync();
 
-    private async Task ReloadAsync()
+    /// <summary>A changed filter or a deletion can leave the current page past the end.</summary>
+    private Task ReloadAsync()
     {
-        entries.Clear();
+        page = 1;
         message = null;
-        await LoadMoreAsync();
+        return LoadAsync();
     }
 
-    private async Task LoadMoreAsync()
+    private async Task LoadAsync()
     {
-        var page = await History.GetPageAsync(entries.Count, PageSize, filter);
-        total = page.TotalCount;
-        entries.AddRange(page.Entries);
+        var result = await History.GetPageAsync((page - 1) * pageSize, pageSize, filter);
+        total = result.TotalCount;
+
+        entries.Clear();
+        entries.AddRange(result.Entries);
+
+        // Deleting the last row of the last page would otherwise strand us on an empty one.
+        if (entries.Count == 0 && page > 1)
+        {
+            page = 1;
+            await LoadAsync();
+        }
+    }
+
+    private Task GoToPageAsync(int target)
+    {
+        page = target;
+        return LoadAsync();
+    }
+
+    private Task SetPageSizeAsync(int size)
+    {
+        pageSize = size;
+        page = 1;
+        return LoadAsync();
     }
 
     private async Task DeleteAsync(long id)
     {
         await History.DeleteAsync(id);
-        await ReloadAsync();
+
+        // Stay where we are: removing one row should not send the reader back to the start.
+        await LoadAsync();
     }
 
     private async Task PruneAsync()

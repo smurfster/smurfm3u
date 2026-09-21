@@ -78,32 +78,29 @@ else
         </table>
     </div>
 
-    @if (hasMore)
-    {
-        <div style="margin-top:.75rem">
-            <button @onclick="LoadMoreAsync">Load more</button>
-        </div>
-    }
+    <Pager Page="page" PageSize="pageSize" TotalCount="total"
+           PageChanged="GoToPageAsync" PageSizeChanged="SetPageSizeAsync" />
 }
 
 @code {
-    private const int PageSize = 50;
-
     private readonly List<DownloadItem> rows = [];
     private string statusFilter = string.Empty;
-    private bool hasMore;
+    private int total;
+    private int page = 1;
+    private int pageSize = 50;
     private string? message;
 
-    protected override Task OnInitializedAsync() => ReloadAsync();
+    protected override Task OnInitializedAsync() => LoadAsync();
 
-    private async Task ReloadAsync()
+    /// <summary>A changed filter invalidates the page number, so it goes back to the first.</summary>
+    private Task ReloadAsync()
     {
-        rows.Clear();
+        page = 1;
         message = null;
-        await LoadMoreAsync();
+        return LoadAsync();
     }
 
-    private async Task LoadMoreAsync()
+    private async Task LoadAsync()
     {
         await using var db = await DbFactory.CreateDbContextAsync();
 
@@ -115,21 +112,44 @@ else
         if (Enum.TryParse<DownloadStatus>(statusFilter, out var wanted))
             query = query.Where(x => x.Status == wanted);
 
-        // One extra row tells us whether another page exists without a second count query.
-        var page = await query
+        total = await query.CountAsync();
+
+        var items = await query
             .OrderByDescending(x => x.CompletedAt)
-            .Skip(rows.Count)
-            .Take(PageSize + 1)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
 
-        hasMore = page.Count > PageSize;
-        rows.AddRange(page.Take(PageSize));
+        rows.Clear();
+        rows.AddRange(items);
+
+        // Clearing the last page would otherwise leave the reader on an empty one.
+        if (rows.Count == 0 && page > 1)
+        {
+            page = 1;
+            await LoadAsync();
+        }
+    }
+
+    private Task GoToPageAsync(int target)
+    {
+        page = target;
+        return LoadAsync();
+    }
+
+    private Task SetPageSizeAsync(int size)
+    {
+        pageSize = size;
+        page = 1;
+        return LoadAsync();
     }
 
     private async Task DeleteAsync(string nzoId)
     {
         await Downloads.RemoveFromHistoryAsync(nzoId, deleteFiles: false);
-        await ReloadAsync();
+
+        // Stay where we are: removing one row should not send the reader back to the start.
+        await LoadAsync();
     }
 
     private async Task RetryAsync(string nzoId)
@@ -137,8 +157,8 @@ else
         await Downloads.RetryAsync(nzoId);
 
         // A retried item is back in the queue and no longer belongs in this list, so the
-        // page is rebuilt rather than extended; LoadMoreAsync would leave the stale row.
-        await ReloadAsync();
+        // page is reloaded rather than left holding a stale row.
+        await LoadAsync();
         message = "Requeued.";
     }
 

@@ -408,3 +408,23 @@ input[type=checkbox] {
     .nav a.active { border-left: none; border-bottom-color: var(--accent); }
     .content { padding: 1rem; }
 }
+
+/* ---- Pager ---- */
+
+.pager {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-top: 0.75rem;
+}
+
+.pager .actions {
+    gap: 0.35rem;
+}
+
+.pager button[disabled] {
+    opacity: 0.4;
+    cursor: default;
+}

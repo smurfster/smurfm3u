@@ -1,0 +1,238 @@
+@page "/search"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject SearchService Searcher
+@inject DownloadService Downloads
+@inject SettingsService SettingsStore
+
+<PageTitle>Search - Smurfm3u</PageTitle>
+
+<div class="page-header">
+    <h1>Search</h1>
+</div>
+
+@if (message is not null)
+{
+    <div class="alert @(messageIsError ? "bad" : "ok")">@message</div>
+}
+
+<div class="card">
+    <div class="field-grid">
+        <div class="field" style="grid-column:1 / -1">
+            <label>Title</label>
+            <input @bind="query" @bind:event="oninput" @onkeydown="OnKeyDownAsync"
+                   placeholder="Top Gear, Pacific Rim, ..." />
+            <div class="hint">Leave blank to browse everything, newest first.</div>
+        </div>
+        <div class="field">
+            <label>Kind</label>
+            <select @bind="kind">
+                <option value="@SearchKind.Search">Anything</option>
+                <option value="@SearchKind.TvSearch">TV</option>
+                <option value="@SearchKind.MovieSearch">Movies</option>
+            </select>
+        </div>
+        <div class="field">
+            <label>Season</label>
+            <input type="number" min="0" @bind="season" placeholder="any" />
+        </div>
+        <div class="field">
+            <label>Episode</label>
+            <input type="number" min="0" @bind="episode" placeholder="any" />
+        </div>
+    </div>
+
+    <div class="actions">
+        <button class="primary" @onclick="RunAsync" disabled="@searching">
+            @(searching ? "Searching..." : "Search")
+        </button>
+        <button @onclick="ClearAsync" disabled="@searching">Clear</button>
+    </div>
+</div>
+
+@if (searched)
+{
+    @if (relaxed)
+    {
+        <div class="card" style="padding:.7rem 1rem">
+            <span class="pill warn">Closest matches</span>
+            <span class="muted">
+                Nothing contains every word of that query, so the nearest entries are shown instead.
+            </span>
+        </div>
+    }
+
+    @if (hits.Count == 0)
+    {
+        <div class="card empty">Nothing matched.</div>
+    }
+    else
+    {
+        <div class="card" style="padding:0">
+            <table>
+                <thead>
+                <tr>
+                    <th>Release</th>
+                    <th>Kind</th>
+                    <th>Playlist</th>
+                    <th class="numeric">Size</th>
+                    <th>Added</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach (var hit in hits)
+                {
+                    <tr>
+                        <td>
+                            <div class="mono">@hit.ReleaseName</div>
+                            <div class="muted" style="font-size:.8rem">@hit.Item.RawTitle</div>
+                        </td>
+                        <td><span class="pill">@(hit.Item.Kind == MediaKind.Series ? "TV" : "Movie")</span></td>
+                        <td class="muted">@(hit.Item.Source?.Name ?? "-")</td>
+                        <td class="numeric">@SabFormat.Size(hit.SizeBytes)</td>
+                        <td class="muted">@hit.Item.FirstSeenAt.LocalDateTime.ToString("d MMM yyyy")</td>
+                        <td>
+                            @if (queued.Contains(hit.Item.Id))
+                            {
+                                <span class="pill ok">Queued</span>
+                            }
+                            else
+                            {
+                                <button class="small" @onclick="() => DownloadAsync(hit)">Download</button>
+                            }
+                        </td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        </div>
+
+        <Pager Page="page" PageSize="pageSize" TotalCount="total"
+               PageChanged="GoToPageAsync" PageSizeChanged="SetPageSizeAsync" />
+    }
+}
+
+@code {
+    private readonly List<SearchHit> hits = [];
+
+    /// <summary>Entries queued from this page, so the button can say so without a reload.</summary>
+    private readonly HashSet<long> queued = [];
+
+    private string query = string.Empty;
+    private SearchKind kind = SearchKind.Search;
+    private int? season;
+    private int? episode;
+
+    private int total;
+    private int page = 1;
+    private int pageSize = 50;
+
+    private bool searching;
+    private bool searched;
+    private bool relaxed;
+
+    private string? message;
+    private bool messageIsError;
+
+    private Task OnKeyDownAsync(KeyboardEventArgs e) =>
+        e.Key == "Enter" ? RunAsync() : Task.CompletedTask;
+
+    /// <summary>A new query starts at the first page; paging keeps the one it is on.</summary>
+    private Task RunAsync()
+    {
+        page = 1;
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        searching = true;
+        message = null;
+
+        try
+        {
+            var request = new SearchRequest(
+                kind,
+                query,
+                season is > 0 ? season : null,
+                episode is > 0 ? episode : null,
+                [],
+                (page - 1) * pageSize,
+                pageSize);
+
+            var results = await Searcher.SearchAsync(request);
+
+            hits.Clear();
+            hits.AddRange(results.Hits);
+            total = results.Total;
+            relaxed = results.Relaxed;
+            searched = true;
+        }
+        catch (Exception ex)
+        {
+            SetMessage($"Search failed: {ex.Message}", isError: true);
+        }
+        finally
+        {
+            searching = false;
+        }
+    }
+
+    private Task GoToPageAsync(int target)
+    {
+        page = target;
+        return LoadAsync();
+    }
+
+    private Task SetPageSizeAsync(int size)
+    {
+        pageSize = size;
+        page = 1;
+        return LoadAsync();
+    }
+
+    private Task ClearAsync()
+    {
+        query = string.Empty;
+        season = null;
+        episode = null;
+        kind = SearchKind.Search;
+        hits.Clear();
+        queued.Clear();
+        total = 0;
+        page = 1;
+        searched = false;
+        relaxed = false;
+        message = null;
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Queues the entry exactly as a grab from Sonarr or Radarr would, category included, so
+    /// it lands in the same place and the *arr apps can still import it.
+    /// </summary>
+    private async Task DownloadAsync(SearchHit hit)
+    {
+        try
+        {
+            var settings = await SettingsStore.GetAsync();
+            var category = hit.Item.Kind == MediaKind.Series ? settings.TvCategory : settings.MovieCategory;
+
+            await Downloads.EnqueueAsync(hit.Item.Id, category, priority: 0, nameOverride: null);
+
+            queued.Add(hit.Item.Id);
+            SetMessage($"Queued {hit.ReleaseName}.", isError: false);
+        }
+        catch (Exception ex)
+        {
+            SetMessage($"Could not queue that entry: {ex.Message}", isError: true);
+        }
+    }
+
+    private void SetMessage(string text, bool isError)
+    {
+        message = text;
+        messageIsError = isError;
+    }
+}

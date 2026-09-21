@@ -92,10 +92,16 @@ else
             </tbody>
         </table>
     </div>
+
+    <Pager Page="page" PageSize="pageSize" TotalCount="total"
+           PageChanged="GoToPageAsync" PageSizeChanged="SetPageSizeAsync" />
 }
 
 @code {
     private readonly List<DownloadItem> rows = [];
+    private int total;
+    private int page = 1;
+    private int pageSize = 50;
 
     private PeriodicTimer? timer;
     private CancellationTokenSource? loop;
@@ -129,16 +135,43 @@ else
     {
         await using var db = await DbFactory.CreateDbContextAsync();
 
-        var items = await db.Downloads.AsNoTracking()
+        var query = db.Downloads.AsNoTracking()
             .Where(x => x.Status == DownloadStatus.Queued
                         || x.Status == DownloadStatus.Downloading
-                        || x.Status == DownloadStatus.Paused)
+                        || x.Status == DownloadStatus.Paused);
+
+        total = await query.CountAsync();
+
+        var items = await query
             .OrderBy(x => x.Priority)
             .ThenBy(x => x.QueuedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
 
         rows.Clear();
         rows.AddRange(items);
+
+        // The queue drains on its own, so a page can empty under the reader without them
+        // touching anything.
+        if (rows.Count == 0 && page > 1)
+        {
+            page = 1;
+            await LoadAsync();
+        }
+    }
+
+    private Task GoToPageAsync(int target)
+    {
+        page = target;
+        return LoadAsync();
+    }
+
+    private Task SetPageSizeAsync(int size)
+    {
+        pageSize = size;
+        page = 1;
+        return LoadAsync();
     }
 
     private async Task PauseAsync(string nzoId)

@@ -312,6 +312,31 @@ Language and quality badges (`EN -`, `|VIP|`, `[4K]`) are stripped, as are resol
 source and codec tokens that would otherwise leak into the title. The year is kept and
 placed where the *arr parsers expect it. Numeric titles such as `1917 (2019)` survive.
 
+## Searching and downloading by hand
+
+**Search** in the sidebar queries the same index Prowlarr does, without going through the
+*arr apps at all. Type a title, narrow it to TV or Movies, optionally give a season and
+episode, and every match comes back with a **Download** button.
+
+Downloading from here queues the entry exactly as a grab from Sonarr or Radarr would,
+category included, so the file lands in the same place and can still be imported afterwards.
+The row says **Queued** once it is in, and the Queue page takes it from there.
+
+Useful for checking what a playlist actually contains, for grabbing something the *arr apps
+have no interest in, and for seeing how a query behaves before blaming Prowlarr for it.
+
+A search whose words are not all found is labelled **Closest matches**, which is the fallback
+described under Searching above.
+
+### Paging
+
+The Queue, History, Search and Searches grids all page the same way: a row count, First,
+Prev, Next and Last, and a page size of 25, 50, 100 or 200. Changing the page size returns
+to the first page, since page 9 of the old size is rarely page 9 of the new one.
+
+Deleting a row keeps you on the page you were on. Clearing a whole page, or a queue draining
+while you watch it, returns to the first page rather than leaving you somewhere empty.
+
 ## Speed limits
 
 Two mechanisms combine, and the tightest active constraint wins:

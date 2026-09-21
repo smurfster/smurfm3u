@@ -1,0 +1,71 @@
+@using Smurfm3u.Core.Models
+
+@* Page navigation shared by every grid, so they all count, label and step the same way. *@
+
+@if (TotalCount > 0)
+{
+    <div class="pager">
+        <span class="muted">@Range.Label</span>
+
+        <div class="actions">
+            <button class="small" @onclick="FirstAsync" disabled="@(!Range.HasPrevious)">&laquo; First</button>
+            <button class="small" @onclick="PreviousAsync" disabled="@(!Range.HasPrevious)">&lsaquo; Prev</button>
+            <span class="muted">Page @Range.Clamped of @Range.PageCount</span>
+            <button class="small" @onclick="NextAsync" disabled="@(!Range.HasNext)">Next &rsaquo;</button>
+            <button class="small" @onclick="LastAsync" disabled="@(!Range.HasNext)">Last &raquo;</button>
+
+            @if (ShowPageSize)
+            {
+                <select value="@PageSize" @onchange="PageSizeChangedAsync" style="width:auto">
+                    @foreach (var size in PageSizes)
+                    {
+                        <option value="@size">@size per page</option>
+                    }
+                </select>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private static readonly int[] PageSizes = [25, 50, 100, 200];
+
+    /// <summary>One-based, because it is shown to a person.</summary>
+    [Parameter] public int Page { get; set; } = 1;
+
+    [Parameter] public int PageSize { get; set; } = 50;
+
+    [Parameter] public int TotalCount { get; set; }
+
+    [Parameter] public bool ShowPageSize { get; set; } = true;
+
+    [Parameter] public EventCallback<int> PageChanged { get; set; }
+
+    [Parameter] public EventCallback<int> PageSizeChanged { get; set; }
+
+    /// <summary>All the arithmetic lives in Core, where it can be tested without a browser.</summary>
+    private PageRange Range => new(Page, PageSize, TotalCount);
+
+    private Task FirstAsync() => GoAsync(1);
+
+    private Task PreviousAsync() => GoAsync(Range.Clamped - 1);
+
+    private Task NextAsync() => GoAsync(Range.Clamped + 1);
+
+    private Task LastAsync() => GoAsync(Range.PageCount);
+
+    private Task GoAsync(int page)
+    {
+        var target = new PageRange(page, PageSize, TotalCount).Clamped;
+        return target == Range.Clamped ? Task.CompletedTask : PageChanged.InvokeAsync(target);
+    }
+
+    /// <summary>
+    /// A bigger page while on page 9 would leave the grid past its own end, so the caller is
+    /// told to go back to the first page along with the new size.
+    /// </summary>
+    private Task PageSizeChangedAsync(ChangeEventArgs e) =>
+        int.TryParse(e.Value?.ToString(), out var size) && size != PageSize
+            ? PageSizeChanged.InvokeAsync(size)
+            : Task.CompletedTask;
+}
