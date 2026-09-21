@@ -1,0 +1,395 @@
+@page "/sources"
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.EntityFrameworkCore
+@using Smurfm3u.Data
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject M3uRefreshService Refresher
+@inject IServiceScopeFactory ScopeFactory
+
+<PageTitle>Playlists - Smurfm3u</PageTitle>
+
+<div class="page-header">
+    <h1>Playlists</h1>
+    <div class="actions">
+        <button class="primary" @onclick="StartAdd">Add playlist</button>
+    </div>
+</div>
+
+@if (message is not null)
+{
+    <div class="alert @(messageIsError ? "bad" : "ok")">@message</div>
+}
+
+@if (editing is not null)
+{
+    <div class="card">
+        <h2 style="margin-top:0">@(editing.Id == 0 ? "Add playlist" : $"Edit {editing.Name}")</h2>
+
+        <EditForm Model="editing" OnValidSubmit="SaveAsync" FormName="source">
+            <DataAnnotationsValidator />
+
+            <div class="field-grid">
+                <div class="field">
+                    <label>Name</label>
+                    <InputText @bind-Value="editing.Name" />
+                    <ValidationMessage For="() => editing.Name" class="validation-message" />
+                </div>
+
+                <div class="field">
+                    <label>Type</label>
+                    <InputSelect @bind-Value="editing.Kind">
+                        <option value="@M3uSourceKind.Remote">Remote URL</option>
+                        <option value="@M3uSourceKind.Local">Local file</option>
+                    </InputSelect>
+                </div>
+            </div>
+
+            <div class="field">
+                <label>@(editing.Kind == M3uSourceKind.Local ? "File path inside the container" : "Playlist URL")</label>
+                <InputText @bind-Value="editing.Location" />
+                <div class="hint">
+                    @(editing.Kind == M3uSourceKind.Local
+                        ? "For example /playlists/vod.m3u, mounted as a volume."
+                        : "The provider's get.php or .m3u8 link.")
+                </div>
+                <ValidationMessage For="() => editing.Location" class="validation-message" />
+            </div>
+
+            <div class="field-grid">
+                <div class="field">
+                    <label>Quality tag</label>
+                    <InputText @bind-Value="editing.QualityTag" />
+                    <div class="hint">Source tag in release names, e.g. WEB-DL.</div>
+                </div>
+
+                <div class="field">
+                    <label>Resolution tag</label>
+                    <InputText @bind-Value="editing.ResolutionTag" />
+                    <div class="hint">e.g. 1080p. Leave blank to omit. Also picks the Newznab subcategory.</div>
+                </div>
+
+                <div class="field">
+                    <label>Release group</label>
+                    <InputText @bind-Value="editing.ReleaseGroup" />
+                    <div class="hint">Suffix after the dash. Leave blank to omit.</div>
+                </div>
+            </div>
+
+            <div class="field-grid">
+                <div class="field">
+                    <label>Simultaneous downloads</label>
+                    <InputNumber @bind-Value="editing.MaxConcurrentDownloads" />
+                    <div class="hint">Cap for this playlist. The global cap still applies.</div>
+                </div>
+
+                <div class="field">
+                    <label>Pause between starts (seconds)</label>
+                    <InputNumber @bind-Value="editing.StartDelaySeconds" />
+                    <div class="hint">Wait this long before starting the next download from here.</div>
+                </div>
+
+                <div class="field">
+                    <label>Speed limit (KiB/s)</label>
+                    <InputNumber @bind-Value="editing.SpeedLimitKibps" />
+                    <div class="hint">0 for no per-playlist limit.</div>
+                </div>
+
+                <div class="field">
+                    <label>Refresh schedule (cron)</label>
+                    <InputText @bind-Value="editing.RefreshCron" />
+                    <div class="hint">Five fields, UTC. Blank disables scheduled refresh.</div>
+                </div>
+            </div>
+
+            <div class="field">
+                <label>Extra HTTP headers</label>
+                <InputTextArea @bind-Value="editing.Headers" />
+                <div class="hint">One per line as "Name: value". Used for the playlist fetch and downloads.</div>
+            </div>
+
+            <div class="field inline-field">
+                <InputCheckbox id="enabled" @bind-Value="editing.Enabled" />
+                <label for="enabled" style="margin:0">Enabled</label>
+            </div>
+
+            <div class="actions">
+                <button type="submit" class="primary">Save</button>
+                <button type="button" @onclick="() => editing = null">Cancel</button>
+            </div>
+        </EditForm>
+    </div>
+}
+
+@if (sources.Count == 0)
+{
+    <div class="card empty">No playlists configured yet.</div>
+}
+else
+{
+    <div class="card" style="padding:0">
+        <table>
+            <thead>
+            <tr>
+                <th>Name</th>
+                <th>Location</th>
+                <th>Tags</th>
+                <th>Status</th>
+                <th class="numeric">VOD / total</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var source in sources)
+            {
+                <tr>
+                    <td>
+                        <strong>@source.Name</strong>
+                        @if (!source.Enabled)
+                        {
+                            <span class="pill" style="margin-left:.4rem">Disabled</span>
+                        }
+                        <div class="muted" style="font-size:.8rem">
+                            @(string.IsNullOrWhiteSpace(source.RefreshCron) ? "manual refresh only" : source.RefreshCron)
+                            &middot; @source.MaxConcurrentDownloads concurrent
+                        </div>
+                    </td>
+                    <td class="mono" style="max-width:280px;overflow:hidden;text-overflow:ellipsis">@source.Location</td>
+                    <td class="mono">@TagPreview(source)</td>
+                    <td>
+                        <span class="pill @StatusClass(source.LastRefreshStatus)">@StatusLabel(source.LastRefreshStatus)</span>
+                        @if (source.LastRefreshError is { Length: > 0 })
+                        {
+                            <div class="muted" style="font-size:.8rem;max-width:280px">@source.LastRefreshError</div>
+                        }
+                    </td>
+                    <td class="numeric">@source.VodEntries.ToString("N0") / @source.TotalEntries.ToString("N0")</td>
+                    <td>
+                        <div class="actions">
+                            <button class="small" disabled="@(refreshing.Contains(source.Id))"
+                                    @onclick="() => RefreshAsync(source.Id)">
+                                @(refreshing.Contains(source.Id) ? "Refreshing..." : "Refresh")
+                            </button>
+                            <button class="small" @onclick="() => ToggleAsync(source.Id)">
+                                @(source.Enabled ? "Disable" : "Enable")
+                            </button>
+                            <button class="small" @onclick="() => StartEdit(source)">Edit</button>
+                            <button class="small danger" @onclick="() => DeleteAsync(source.Id)">Delete</button>
+                        </div>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private readonly List<M3uSource> sources = [];
+    private readonly HashSet<int> refreshing = [];
+
+    private SourceForm? editing;
+    private string? message;
+    private bool messageIsError;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var rows = await db.Sources.AsNoTracking().OrderBy(x => x.Name).ToListAsync();
+
+        sources.Clear();
+        sources.AddRange(rows);
+    }
+
+    private void StartAdd() => editing = new SourceForm();
+
+    private void StartEdit(M3uSource source) => editing = SourceForm.From(source);
+
+    private async Task SaveAsync()
+    {
+        if (editing is null) return;
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var entity = editing.Id == 0
+            ? new M3uSource()
+            : await db.Sources.FirstOrDefaultAsync(x => x.Id == editing.Id);
+
+        if (entity is null)
+        {
+            SetMessage("That playlist no longer exists.", isError: true);
+            editing = null;
+            await LoadAsync();
+            return;
+        }
+
+        editing.ApplyTo(entity);
+
+        if (editing.Id == 0)
+            db.Sources.Add(entity);
+
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // The only unique constraint on the table is the name.
+            SetMessage($"A playlist called \"{editing.Name}\" already exists.", isError: true);
+            return;
+        }
+
+        var isNew = editing.Id == 0;
+        SetMessage(isNew ? $"Added {entity.Name}." : $"Saved {entity.Name}.", isError: false);
+        editing = null;
+
+        await LoadAsync();
+
+        // A brand new playlist is empty until it is read, so start that straight away.
+        if (isNew && entity.Enabled)
+            await RefreshAsync(entity.Id);
+    }
+
+    private async Task RefreshAsync(int sourceId)
+    {
+        if (!refreshing.Add(sourceId)) return;
+
+        try
+        {
+            // Runs on its own scope so a long refresh does not hold the circuit's services.
+            using var scope = ScopeFactory.CreateScope();
+            var refresher = scope.ServiceProvider.GetRequiredService<M3uRefreshService>();
+            var result = await refresher.RefreshAsync(sourceId);
+
+            SetMessage(
+                $"Found {result.VodEntries:N0} on-demand entries in {result.TotalEntries:N0} lines " +
+                $"({result.Added:N0} new, {result.Deactivated:N0} gone) in {result.Elapsed.TotalSeconds:N1}s.",
+                isError: false);
+        }
+        catch (Exception ex)
+        {
+            SetMessage($"Refresh failed: {ex.Message}", isError: true);
+        }
+        finally
+        {
+            refreshing.Remove(sourceId);
+            await LoadAsync();
+        }
+    }
+
+    private async Task ToggleAsync(int sourceId)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var source = await db.Sources.FirstOrDefaultAsync(x => x.Id == sourceId);
+        if (source is null) return;
+
+        source.Enabled = !source.Enabled;
+        await db.SaveChangesAsync();
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(int sourceId)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var source = await db.Sources.FirstOrDefaultAsync(x => x.Id == sourceId);
+        if (source is null) return;
+
+        // Entries cascade; finished downloads keep their rows with a null source.
+        db.Sources.Remove(source);
+        await db.SaveChangesAsync();
+
+        SetMessage($"Deleted {source.Name} and its entries.", isError: false);
+        await LoadAsync();
+    }
+
+    private void SetMessage(string text, bool isError)
+    {
+        message = text;
+        messageIsError = isError;
+    }
+
+    private static string TagPreview(M3uSource source)
+    {
+        var parts = new[] { source.ResolutionTag, source.QualityTag }
+            .Where(x => !string.IsNullOrWhiteSpace(x));
+
+        var tags = string.Join('.', parts);
+        return string.IsNullOrWhiteSpace(source.ReleaseGroup) ? tags : $"{tags}-{source.ReleaseGroup}";
+    }
+
+    private static string StatusLabel(RefreshStatus status) => status switch
+    {
+        RefreshStatus.Success => "OK",
+        RefreshStatus.Running => "Refreshing",
+        RefreshStatus.Failed => "Failed",
+        _ => "Never run"
+    };
+
+    private static string StatusClass(RefreshStatus status) => status switch
+    {
+        RefreshStatus.Success => "ok",
+        RefreshStatus.Running => "busy",
+        RefreshStatus.Failed => "bad",
+        _ => ""
+    };
+
+    /// <summary>Edit model, so a cancelled edit never leaves a half-changed entity tracked.</summary>
+    private sealed class SourceForm
+    {
+        public int Id { get; set; }
+
+        [Required(ErrorMessage = "Give the playlist a name.")]
+        public string Name { get; set; } = string.Empty;
+
+        public M3uSourceKind Kind { get; set; } = M3uSourceKind.Remote;
+
+        [Required(ErrorMessage = "Enter a URL or file path.")]
+        public string Location { get; set; } = string.Empty;
+
+        public bool Enabled { get; set; } = true;
+        public string QualityTag { get; set; } = "WEB-DL";
+        public string ResolutionTag { get; set; } = "1080p";
+        public string ReleaseGroup { get; set; } = "Smurfm3u";
+        public int MaxConcurrentDownloads { get; set; } = 1;
+        public int StartDelaySeconds { get; set; }
+        public int SpeedLimitKibps { get; set; }
+        public string? RefreshCron { get; set; } = "0 */6 * * *";
+        public string? Headers { get; set; }
+
+        public static SourceForm From(M3uSource source) => new()
+        {
+            Id = source.Id,
+            Name = source.Name,
+            Kind = source.Kind,
+            Location = source.Location,
+            Enabled = source.Enabled,
+            QualityTag = source.QualityTag,
+            ResolutionTag = source.ResolutionTag,
+            ReleaseGroup = source.ReleaseGroup,
+            MaxConcurrentDownloads = source.MaxConcurrentDownloads,
+            StartDelaySeconds = source.StartDelaySeconds,
+            SpeedLimitKibps = source.SpeedLimitKibps,
+            RefreshCron = source.RefreshCron,
+            Headers = source.Headers
+        };
+
+        public void ApplyTo(M3uSource source)
+        {
+            source.Name = Name.Trim();
+            source.Kind = Kind;
+            source.Location = Location.Trim();
+            source.Enabled = Enabled;
+            source.QualityTag = QualityTag?.Trim() ?? string.Empty;
+            source.ResolutionTag = ResolutionTag?.Trim() ?? string.Empty;
+            source.ReleaseGroup = ReleaseGroup?.Trim() ?? string.Empty;
+            source.MaxConcurrentDownloads = Math.Clamp(MaxConcurrentDownloads, 1, 50);
+            source.StartDelaySeconds = Math.Clamp(StartDelaySeconds, 0, 3600);
+            source.SpeedLimitKibps = Math.Max(0, SpeedLimitKibps);
+            source.RefreshCron = string.IsNullOrWhiteSpace(RefreshCron) ? null : RefreshCron.Trim();
+            source.Headers = string.IsNullOrWhiteSpace(Headers) ? null : Headers.Trim();
+        }
+    }
+}

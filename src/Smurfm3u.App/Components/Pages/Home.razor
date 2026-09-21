@@ -1,0 +1,259 @@
+@page "/"
+@using Microsoft.EntityFrameworkCore
+@using Smurfm3u.Data
+@attribute [Authorize]
+@rendermode InteractiveServer
+@implements IDisposable
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject DownloadManager Manager
+@inject SpeedLimitService SpeedLimits
+@inject SettingsService Settings
+
+<PageTitle>Dashboard - Smurfm3u</PageTitle>
+
+<h1>Dashboard</h1>
+
+<div class="card-row" style="margin-bottom:1rem">
+    <div class="card">
+        <div class="stat-label">Playlists</div>
+        <div class="stat">@enabledSources<span class="muted" style="font-size:1rem"> / @totalSources</span></div>
+    </div>
+    <div class="card">
+        <div class="stat-label">VOD entries</div>
+        <div class="stat">@itemCount.ToString("N0")</div>
+    </div>
+    <div class="card">
+        <div class="stat-label">Queued</div>
+        <div class="stat">@queuedCount</div>
+    </div>
+    <div class="card">
+        <div class="stat-label">Downloading</div>
+        <div class="stat">@Manager.Count</div>
+    </div>
+    <div class="card">
+        <div class="stat-label">Speed</div>
+        <div class="stat">@SabFormat.Size(Manager.TotalBytesPerSecond())<span class="muted" style="font-size:1rem">/s</span></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="actions" style="justify-content:space-between">
+        <div>
+            <strong>Rate limit:</strong>
+            @if (SpeedLimits.Current.Paused)
+            {
+                <span class="pill warn">Paused &mdash; @SpeedLimits.Current.Reason</span>
+            }
+            else if (SpeedLimits.Current.EffectiveKibps > 0)
+            {
+                <span class="pill busy">@SpeedLimits.Current.EffectiveKibps KiB/s &mdash; @SpeedLimits.Current.Reason</span>
+            }
+            else
+            {
+                <span class="pill ok">Unlimited</span>
+            }
+        </div>
+        <div class="muted">
+            API key: <span class="mono">@MaskedApiKey</span>
+        </div>
+    </div>
+</div>
+
+<h2>Playlists</h2>
+
+@if (sources.Count == 0)
+{
+    <div class="card empty">
+        No playlists yet. <a href="sources">Add one</a> to start ingesting VOD entries.
+    </div>
+}
+else
+{
+    <div class="card" style="padding:0">
+        <table>
+            <thead>
+            <tr>
+                <th>Name</th>
+                <th>Status</th>
+                <th class="numeric">VOD entries</th>
+                <th>Last refreshed</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var source in sources)
+            {
+                <tr>
+                    <td>
+                        <a href="sources">@source.Name</a>
+                        @if (!source.Enabled)
+                        {
+                            <span class="pill" style="margin-left:.4rem">Disabled</span>
+                        }
+                    </td>
+                    <td>@RefreshPill(source)</td>
+                    <td class="numeric">@source.VodEntries.ToString("N0")</td>
+                    <td class="muted">@Relative(source.LastRefreshCompletedAt)</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}
+
+<h2>Recent downloads</h2>
+
+@if (recent.Count == 0)
+{
+    <div class="card empty">Nothing has been downloaded yet.</div>
+}
+else
+{
+    <div class="card" style="padding:0">
+        <table>
+            <thead>
+            <tr>
+                <th>Release</th>
+                <th>Status</th>
+                <th class="numeric">Size</th>
+                <th>Finished</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var download in recent)
+            {
+                <tr>
+                    <td class="mono">@download.Name</td>
+                    <td>@StatusPill(download.Status)</td>
+                    <td class="numeric">@SabFormat.Size(download.DownloadedBytes)</td>
+                    <td class="muted">@Relative(download.CompletedAt)</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private readonly List<M3uSource> sources = [];
+    private readonly List<DownloadItem> recent = [];
+
+    private int totalSources;
+    private int enabledSources;
+    private int itemCount;
+    private int queuedCount;
+    private string apiKey = string.Empty;
+
+    private PeriodicTimer? timer;
+    private CancellationTokenSource? loop;
+
+    private string MaskedApiKey => apiKey.Length <= 8 ? apiKey : apiKey[..4] + new string('*', 8) + apiKey[^4..];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+
+        loop = new CancellationTokenSource();
+        timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+        _ = RefreshLoopAsync(loop.Token);
+    }
+
+    private async Task RefreshLoopAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (await timer!.WaitForNextTickAsync(ct))
+            {
+                await LoadAsync();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The page went away.
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var allSources = await db.Sources.AsNoTracking().OrderBy(x => x.Name).ToListAsync();
+        sources.Clear();
+        sources.AddRange(allSources);
+
+        totalSources = allSources.Count;
+        enabledSources = allSources.Count(x => x.Enabled);
+
+        itemCount = await db.Items.CountAsync(x => x.IsActive);
+        queuedCount = await db.Downloads.CountAsync(x =>
+            x.Status == DownloadStatus.Queued || x.Status == DownloadStatus.Paused);
+
+        var recentRows = await db.Downloads.AsNoTracking()
+            .Where(x => x.CompletedAt != null)
+            .OrderByDescending(x => x.CompletedAt)
+            .Take(10)
+            .ToListAsync();
+
+        recent.Clear();
+        recent.AddRange(recentRows);
+
+        apiKey = (await Settings.GetAsync()).ApiKey;
+    }
+
+    private static RenderFragment RefreshPill(M3uSource source) => builder =>
+    {
+        var (cls, text) = source.LastRefreshStatus switch
+        {
+            RefreshStatus.Success => ("ok", "OK"),
+            RefreshStatus.Running => ("busy", "Refreshing"),
+            RefreshStatus.Failed => ("bad", "Failed"),
+            _ => ("", "Never run")
+        };
+
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", $"pill {cls}");
+        builder.AddAttribute(2, "title", source.LastRefreshError ?? string.Empty);
+        builder.AddContent(3, text);
+        builder.CloseElement();
+    };
+
+    private static RenderFragment StatusPill(DownloadStatus status) => builder =>
+    {
+        var cls = status switch
+        {
+            DownloadStatus.Completed => "ok",
+            DownloadStatus.Downloading => "busy",
+            DownloadStatus.Failed => "bad",
+            DownloadStatus.Paused => "warn",
+            _ => ""
+        };
+
+        builder.OpenElement(0, "span");
+        builder.AddAttribute(1, "class", $"pill {cls}");
+        builder.AddContent(2, status.ToString());
+        builder.CloseElement();
+    };
+
+    private static string Relative(DateTimeOffset? moment)
+    {
+        if (moment is not { } value) return "never";
+
+        var delta = DateTimeOffset.UtcNow - value;
+
+        return delta switch
+        {
+            { TotalSeconds: < 60 } => "just now",
+            { TotalMinutes: < 60 } => $"{(int)delta.TotalMinutes}m ago",
+            { TotalHours: < 24 } => $"{(int)delta.TotalHours}h ago",
+            { TotalDays: < 30 } => $"{(int)delta.TotalDays}d ago",
+            _ => value.LocalDateTime.ToString("d MMM yyyy")
+        };
+    }
+
+    public void Dispose()
+    {
+        loop?.Cancel();
+        loop?.Dispose();
+        timer?.Dispose();
+    }
+}

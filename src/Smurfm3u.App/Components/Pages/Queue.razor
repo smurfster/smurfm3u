@@ -1,0 +1,181 @@
+@page "/queue"
+@using Microsoft.EntityFrameworkCore
+@using Smurfm3u.Data
+@attribute [Authorize]
+@rendermode InteractiveServer
+@implements IDisposable
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject DownloadService Downloads
+@inject DownloadManager Manager
+@inject SpeedLimitService SpeedLimits
+
+<PageTitle>Queue - Smurfm3u</PageTitle>
+
+<div class="page-header">
+    <h1>Queue</h1>
+    <div class="actions">
+        <span class="muted">@SabFormat.Size(Manager.TotalBytesPerSecond())/s</span>
+        @if (SpeedLimits.Current.Paused)
+        {
+            <span class="pill warn">Paused by schedule</span>
+        }
+        <button @onclick="() => SetAllPausedAsync(true)" disabled="@(rows.Count == 0)">Pause all</button>
+        <button @onclick="() => SetAllPausedAsync(false)" disabled="@(rows.Count == 0)">Resume all</button>
+    </div>
+</div>
+
+@if (rows.Count == 0)
+{
+    <div class="card empty">
+        The queue is empty. Grabs from Sonarr and Radarr land here.
+    </div>
+}
+else
+{
+    <div class="card" style="padding:0">
+        <table>
+            <thead>
+            <tr>
+                <th>Release</th>
+                <th>Category</th>
+                <th>Status</th>
+                <th style="width:160px">Progress</th>
+                <th class="numeric">Size</th>
+                <th class="numeric">Speed</th>
+                <th class="numeric">Left</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var row in rows)
+            {
+                var live = Manager.Get(row.Id);
+                var downloaded = live is not null ? Interlocked.Read(ref live.DownloadedBytes) : row.DownloadedBytes;
+                var total = Math.Max(row.TotalBytes, live is not null ? Interlocked.Read(ref live.TotalBytes) : 0);
+                var rate = live is not null ? Interlocked.Read(ref live.BytesPerSecond) : 0;
+                var percent = total > 0 ? Math.Clamp((int)(downloaded * 100 / total), 0, 100) : 0;
+
+                <tr>
+                    <td class="mono">@row.Name</td>
+                    <td>@(string.IsNullOrWhiteSpace(row.Category) ? "-" : row.Category)</td>
+                    <td>
+                        <span class="pill @PillClass(row.Status)">@row.Status</span>
+                        @if (row.AttemptCount > 1)
+                        {
+                            <span class="muted" style="margin-left:.3rem">try @row.AttemptCount</span>
+                        }
+                    </td>
+                    <td>
+                        <div class="progress">
+                            <div class="progress-bar" style="width:@(percent)%"></div>
+                            <div class="progress-text">@percent%</div>
+                        </div>
+                    </td>
+                    <td class="numeric">@SabFormat.Size(total)</td>
+                    <td class="numeric">@(rate > 0 ? SabFormat.Size(rate) + "/s" : "-")</td>
+                    <td class="numeric">@SabFormat.TimeLeft(Math.Max(0, total - downloaded), rate)</td>
+                    <td>
+                        <div class="actions">
+                            @if (row.Status == DownloadStatus.Paused)
+                            {
+                                <button class="small" @onclick="() => ResumeAsync(row.NzoId)">Resume</button>
+                            }
+                            else
+                            {
+                                <button class="small" @onclick="() => PauseAsync(row.NzoId)">Pause</button>
+                            }
+                            <button class="small danger" @onclick="() => RemoveAsync(row.NzoId)">Remove</button>
+                        </div>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    private readonly List<DownloadItem> rows = [];
+
+    private PeriodicTimer? timer;
+    private CancellationTokenSource? loop;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+
+        loop = new CancellationTokenSource();
+        timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
+        _ = RefreshLoopAsync(loop.Token);
+    }
+
+    private async Task RefreshLoopAsync(CancellationToken ct)
+    {
+        try
+        {
+            while (await timer!.WaitForNextTickAsync(ct))
+            {
+                await LoadAsync();
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The page went away.
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var items = await db.Downloads.AsNoTracking()
+            .Where(x => x.Status == DownloadStatus.Queued
+                        || x.Status == DownloadStatus.Downloading
+                        || x.Status == DownloadStatus.Paused)
+            .OrderBy(x => x.Priority)
+            .ThenBy(x => x.QueuedAt)
+            .ToListAsync();
+
+        rows.Clear();
+        rows.AddRange(items);
+    }
+
+    private async Task PauseAsync(string nzoId)
+    {
+        await Downloads.PauseAsync(nzoId);
+        await LoadAsync();
+    }
+
+    private async Task ResumeAsync(string nzoId)
+    {
+        await Downloads.ResumeAsync(nzoId);
+        await LoadAsync();
+    }
+
+    private async Task RemoveAsync(string nzoId)
+    {
+        await Downloads.RemoveFromQueueAsync(nzoId, deleteFiles: true);
+        await LoadAsync();
+    }
+
+    private async Task SetAllPausedAsync(bool paused)
+    {
+        await Downloads.SetAllPausedAsync(paused);
+        await LoadAsync();
+    }
+
+    private static string PillClass(DownloadStatus status) => status switch
+    {
+        DownloadStatus.Downloading => "busy",
+        DownloadStatus.Paused => "warn",
+        _ => ""
+    };
+
+    public void Dispose()
+    {
+        loop?.Cancel();
+        loop?.Dispose();
+        timer?.Dispose();
+    }
+}

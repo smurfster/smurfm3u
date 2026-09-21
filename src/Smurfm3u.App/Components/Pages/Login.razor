@@ -1,0 +1,94 @@
+@page "/login"
+@using System.ComponentModel.DataAnnotations
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authentication
+@using Microsoft.AspNetCore.Authentication.Cookies
+@inject UserService Users
+@inject NavigationManager Nav
+@attribute [AllowAnonymous]
+
+@* Deliberately statically rendered: writing the auth cookie needs the real HTTP response. *@
+
+<PageTitle>Sign in - Smurfm3u</PageTitle>
+
+<div class="login-shell">
+    <div class="login-card">
+        <h1>Smurf<span style="color:var(--accent)">m3u</span></h1>
+
+        @if (failed)
+        {
+            <div class="alert bad">That username and password did not match.</div>
+        }
+
+        <EditForm Model="Input" OnValidSubmit="SignInAsync" FormName="login">
+            <DataAnnotationsValidator />
+
+            <div class="field">
+                <label for="username">Username</label>
+                <InputText id="username" @bind-Value="Input!.Username" autocomplete="username" autofocus />
+                <ValidationMessage For="() => Input!.Username" class="validation-message" />
+            </div>
+
+            <div class="field">
+                <label for="password">Password</label>
+                <InputText id="password" type="password" @bind-Value="Input!.Password" autocomplete="current-password" />
+                <ValidationMessage For="() => Input!.Password" class="validation-message" />
+            </div>
+
+            <button type="submit" class="primary" style="width:100%">Sign in</button>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    [SupplyParameterFromForm]
+    private LoginInput? Input { get; set; }
+
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    private bool failed;
+
+    // The form model is supplied by the post; on a plain GET there is nothing to bind yet.
+    protected override void OnInitialized() => Input ??= new LoginInput();
+
+    private async Task SignInAsync()
+    {
+        if (HttpContext is null || Input is null) return;
+
+        var user = await Users.ValidateAsync(Input.Username, Input.Password, HttpContext.RequestAborted);
+        if (user is null)
+        {
+            failed = true;
+            return;
+        }
+
+        var identity = new ClaimsIdentity(
+            [new Claim(ClaimTypes.Name, user.Username), new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())],
+            CookieAuthenticationDefaults.AuthenticationScheme);
+
+        await HttpContext.SignInAsync(
+            CookieAuthenticationDefaults.AuthenticationScheme,
+            new ClaimsPrincipal(identity));
+
+        // Only local paths, so a crafted returnUrl cannot bounce someone off-site.
+        var target = !string.IsNullOrWhiteSpace(ReturnUrl) && Uri.IsWellFormedUriString(ReturnUrl, UriKind.Relative)
+            ? ReturnUrl
+            : "/";
+
+        Nav.NavigateTo(target, forceLoad: true);
+    }
+
+    private sealed class LoginInput
+    {
+        [Required(ErrorMessage = "Enter your username.")]
+        public string Username { get; set; } = string.Empty;
+
+        // Deliberately not [Required]: passwords have no rules, so an empty one must
+        // still be able to sign in rather than being rejected by the form.
+        public string Password { get; set; } = string.Empty;
+    }
+}

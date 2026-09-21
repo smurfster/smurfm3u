@@ -1,0 +1,11 @@
+@inject NavigationManager Nav
+
+@code {
+    // Static server rendering handles this with a real redirect; an interactive circuit
+    // needs a full page load so the cookie middleware can see the request.
+    protected override void OnInitialized()
+    {
+        var returnUrl = Uri.EscapeDataString(new Uri(Nav.Uri).PathAndQuery);
+        Nav.NavigateTo($"/login?returnUrl={returnUrl}", forceLoad: true);
+    }
+}

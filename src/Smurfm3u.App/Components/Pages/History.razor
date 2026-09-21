@@ -1,0 +1,161 @@
+@page "/history"
+@using Microsoft.EntityFrameworkCore
+@using Smurfm3u.Data
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject DownloadService Downloads
+
+<PageTitle>History - Smurfm3u</PageTitle>
+
+<div class="page-header">
+    <h1>Download history</h1>
+    <div class="actions">
+        <select @bind="statusFilter" @bind:after="ReloadAsync" style="width:auto">
+            <option value="">All outcomes</option>
+            <option value="@DownloadStatus.Completed">Completed</option>
+            <option value="@DownloadStatus.Failed">Failed</option>
+            <option value="@DownloadStatus.Deleted">Removed</option>
+        </select>
+        <button class="danger" @onclick="PurgeAsync" disabled="@(rows.Count == 0)">Clear history</button>
+    </div>
+</div>
+
+@if (message is not null)
+{
+    <div class="alert ok">@message</div>
+}
+
+@if (rows.Count == 0)
+{
+    <div class="card empty">Nothing here yet.</div>
+}
+else
+{
+    <div class="card" style="padding:0">
+        <table>
+            <thead>
+            <tr>
+                <th>Release</th>
+                <th>Category</th>
+                <th>Status</th>
+                <th class="numeric">Size</th>
+                <th>Finished</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var row in rows)
+            {
+                <tr>
+                    <td>
+                        <div class="mono">@row.Name</div>
+                        @if (row.FailureMessage is { Length: > 0 })
+                        {
+                            <div class="muted" style="font-size:.8rem">@row.FailureMessage</div>
+                        }
+                        else if (row.CompletedPath is { Length: > 0 })
+                        {
+                            <div class="muted mono" style="font-size:.8rem">@row.CompletedPath</div>
+                        }
+                    </td>
+                    <td>@(string.IsNullOrWhiteSpace(row.Category) ? "-" : row.Category)</td>
+                    <td><span class="pill @PillClass(row.Status)">@Label(row.Status)</span></td>
+                    <td class="numeric">@SabFormat.Size(row.DownloadedBytes > 0 ? row.DownloadedBytes : row.TotalBytes)</td>
+                    <td class="muted">@(row.CompletedAt?.LocalDateTime.ToString("d MMM HH:mm") ?? "-")</td>
+                    <td>
+                        <div class="actions">
+                            @if (row.Status != DownloadStatus.Completed)
+                            {
+                                <button class="small" @onclick="() => RetryAsync(row.NzoId)">Retry</button>
+                            }
+                            <button class="small danger" @onclick="() => DeleteAsync(row.NzoId)">Delete</button>
+                        </div>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+
+    @if (hasMore)
+    {
+        <div style="margin-top:.75rem">
+            <button @onclick="LoadMoreAsync">Load more</button>
+        </div>
+    }
+}
+
+@code {
+    private const int PageSize = 50;
+
+    private readonly List<DownloadItem> rows = [];
+    private string statusFilter = string.Empty;
+    private bool hasMore;
+    private string? message;
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        rows.Clear();
+        message = null;
+        await LoadMoreAsync();
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        var query = db.Downloads.AsNoTracking()
+            .Where(x => x.Status == DownloadStatus.Completed
+                        || x.Status == DownloadStatus.Failed
+                        || x.Status == DownloadStatus.Deleted);
+
+        if (Enum.TryParse<DownloadStatus>(statusFilter, out var wanted))
+            query = query.Where(x => x.Status == wanted);
+
+        // One extra row tells us whether another page exists without a second count query.
+        var page = await query
+            .OrderByDescending(x => x.CompletedAt)
+            .Skip(rows.Count)
+            .Take(PageSize + 1)
+            .ToListAsync();
+
+        hasMore = page.Count > PageSize;
+        rows.AddRange(page.Take(PageSize));
+    }
+
+    private async Task DeleteAsync(string nzoId)
+    {
+        await Downloads.RemoveFromHistoryAsync(nzoId, deleteFiles: false);
+        await ReloadAsync();
+    }
+
+    private async Task RetryAsync(string nzoId)
+    {
+        await Downloads.RetryAsync(nzoId);
+
+        // A retried item is back in the queue and no longer belongs in this list, so the
+        // page is rebuilt rather than extended; LoadMoreAsync would leave the stale row.
+        await ReloadAsync();
+        message = "Requeued.";
+    }
+
+    private async Task PurgeAsync()
+    {
+        var removed = await Downloads.PurgeHistoryAsync(deleteFiles: false);
+        await ReloadAsync();
+        message = $"Cleared {removed} entries. Downloaded files were left on disk.";
+    }
+
+    private static string Label(DownloadStatus status) =>
+        status == DownloadStatus.Deleted ? "Removed" : status.ToString();
+
+    private static string PillClass(DownloadStatus status) => status switch
+    {
+        DownloadStatus.Completed => "ok",
+        DownloadStatus.Failed => "bad",
+        _ => ""
+    };
+}

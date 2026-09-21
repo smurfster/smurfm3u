@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Smurfm3u.App/Smurfm3u.App.csproj" />
+    <Project Path="src/Smurfm3u.Core/Smurfm3u.Core.csproj" />
+    <Project Path="src/Smurfm3u.Data/Smurfm3u.Data.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Smurfm3u.Core.Tests/Smurfm3u.Core.Tests.csproj" />
+  </Folder>
+</Solution>

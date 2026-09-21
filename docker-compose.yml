@@ -1,0 +1,49 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: smurfm3u-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: smurfm3u
+      POSTGRES_USER: smurfm3u
+      # Change this, or point it at a secret, before exposing anything.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-smurfm3u}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U smurfm3u -d smurfm3u"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: smurfm3u:latest
+    container_name: smurfm3u
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Default: "Host=db;Port=5432;Database=smurfm3u;Username=smurfm3u;Password=${POSTGRES_PASSWORD:-smurfm3u}"
+      # Leave these unset to have a password and API key generated and written to the log
+      # on first run. Once the database exists they are ignored.
+      Bootstrap__AdminUsername: ${ADMIN_USERNAME:-admin}
+      Bootstrap__AdminPassword: ${ADMIN_PASSWORD:-}
+      Bootstrap__ApiKey: ${API_KEY:-}
+      TZ: ${TZ:-Etc/UTC}
+    ports:
+      - "${HTTP_PORT:-8090}:8080"
+    volumes:
+      # Sonarr and Radarr must see the completed downloads at the same path they do here,
+      # or you will need a remote path mapping in those apps.
+      - ./data/downloads:/downloads
+      # Data protection keys, so a rebuild does not sign everyone out.
+      - ./data/config:/config
+      # Any local .m3u files you want to add as a playlist source.
+      - ./data/playlists:/playlists
+
+volumes:
+  db-data:

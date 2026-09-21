@@ -1,0 +1,148 @@
+@page "/searches"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject SearchHistoryService History
+
+<PageTitle>Searches - Smurfm3u</PageTitle>
+
+<div class="page-header">
+    <h1>Search history</h1>
+    <div class="actions">
+        <input placeholder="Filter by query" @bind="filter" @bind:event="oninput" @bind:after="ReloadAsync"
+               style="width:200px" />
+        <select @bind="pruneDays" style="width:auto">
+            <option value="90">older than 90 days</option>
+            <option value="30">older than 30 days</option>
+            <option value="7">older than 7 days</option>
+            <option value="1">older than 1 day</option>
+            <option value="0">everything</option>
+        </select>
+        <button class="danger" @onclick="PruneAsync">Delete</button>
+    </div>
+</div>
+
+@if (message is not null)
+{
+    <div class="alert ok">@message</div>
+}
+
+<p class="muted">
+    @total.ToString("N0") recorded searches. Prowlarr, Sonarr and Radarr appear here as they query the indexer.
+</p>
+
+@if (entries.Count == 0)
+{
+    <div class="card empty">No searches recorded yet.</div>
+}
+else
+{
+    <div class="card" style="padding:0">
+        <table>
+            <thead>
+            <tr>
+                <th>When</th>
+                <th>Type</th>
+                <th>Query</th>
+                <th>Episode</th>
+                <th class="numeric">Results</th>
+                <th class="numeric">Took</th>
+                <th>Client</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var entry in entries)
+            {
+                <tr>
+                    <td class="muted">@entry.RequestedAt.LocalDateTime.ToString("d MMM HH:mm:ss")</td>
+                    <td><span class="pill">@Label(entry.Kind)</span></td>
+                    <td>@(string.IsNullOrWhiteSpace(entry.Query) ? "(browse)" : entry.Query)</td>
+                    <td class="mono">@EpisodeLabel(entry)</td>
+                    <td class="numeric">
+                        <span class="@(entry.ResultCount == 0 ? "muted" : "")">@entry.ResultCount</span>
+                    </td>
+                    <td class="numeric muted">@entry.ElapsedMs ms</td>
+                    <td class="muted" style="max-width:220px;overflow:hidden;text-overflow:ellipsis">
+                        @ClientLabel(entry)
+                    </td>
+                    <td>
+                        <button class="small danger" @onclick="() => DeleteAsync(entry.Id)">Delete</button>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+
+    @if (entries.Count < total)
+    {
+        <div style="margin-top:.75rem">
+            <button @onclick="LoadMoreAsync">Load more</button>
+        </div>
+    }
+}
+
+@code {
+    private const int PageSize = 50;
+
+    private readonly List<SearchHistoryEntry> entries = [];
+    private string filter = string.Empty;
+    private int pruneDays = 30;
+    private int total;
+    private string? message;
+
+    protected override Task OnInitializedAsync() => ReloadAsync();
+
+    private async Task ReloadAsync()
+    {
+        entries.Clear();
+        message = null;
+        await LoadMoreAsync();
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        var page = await History.GetPageAsync(entries.Count, PageSize, filter);
+        total = page.TotalCount;
+        entries.AddRange(page.Entries);
+    }
+
+    private async Task DeleteAsync(long id)
+    {
+        await History.DeleteAsync(id);
+        await ReloadAsync();
+    }
+
+    private async Task PruneAsync()
+    {
+        var removed = await History.DeleteOlderThanAsync(pruneDays);
+        await ReloadAsync();
+        message = $"Deleted {removed:N0} entries.";
+    }
+
+    private static string Label(SearchKind kind) => kind switch
+    {
+        SearchKind.TvSearch => "TV",
+        SearchKind.MovieSearch => "Movie",
+        SearchKind.Caps => "Caps",
+        _ => "Search"
+    };
+
+    private static string EpisodeLabel(SearchHistoryEntry entry) =>
+        (entry.Season, entry.Episode) switch
+        {
+            (null, null) => "-",
+            ({ } s, null) => $"S{s:D2}",
+            (null, { } e) => $"E{e:D2}",
+            ({ } s, { } e) => $"S{s:D2}E{e:D2}"
+        };
+
+    private static string ClientLabel(SearchHistoryEntry entry)
+    {
+        var agent = entry.UserAgent ?? string.Empty;
+
+        // The *arr apps send a long UA; the leading product token is the useful part.
+        var product = agent.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? "unknown";
+        return entry.ClientIp is { Length: > 0 } ip ? $"{product} ({ip})" : product;
+    }
+}

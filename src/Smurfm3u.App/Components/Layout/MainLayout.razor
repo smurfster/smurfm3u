@@ -1,0 +1,33 @@
+@inherits LayoutComponentBase
+
+<AuthorizeView>
+    <Authorized>
+        <div class="shell">
+            <nav class="sidebar">
+                <div class="brand">Smurf<span>m3u</span></div>
+                <div class="nav">
+                    <NavLink href="" Match="NavLinkMatch.All">Dashboard</NavLink>
+                    <NavLink href="queue">Queue</NavLink>
+                    <NavLink href="history">History</NavLink>
+                    <NavLink href="sources">Playlists</NavLink>
+                    <NavLink href="searches">Searches</NavLink>
+                    <NavLink href="settings">Settings</NavLink>
+                </div>
+                <div class="sidebar-footer">
+                    <div>@context.User.Identity?.Name</div>
+                    <form action="/account/logout" method="post">
+                        <AntiforgeryToken />
+                        <button type="submit" class="small" style="margin-top:.4rem">Sign out</button>
+                    </form>
+                </div>
+            </nav>
+            <main class="content">
+                @Body
+            </main>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        @* Unauthenticated pages (login, errors) render without the chrome. *@
+        @Body
+    </NotAuthorized>
+</AuthorizeView>

@@ -1,0 +1,393 @@
+@page "/settings"
+@using System.Security.Cryptography
+@using Microsoft.EntityFrameworkCore
+@using Smurfm3u.Core.Options
+@using Smurfm3u.Data
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject SettingsService SettingsStore
+@inject SpeedLimitService SpeedLimits
+@inject UserService Users
+@inject IDbContextFactory<AppDbContext> DbFactory
+@inject NavigationManager Nav
+@inject AuthenticationStateProvider AuthState
+
+<PageTitle>Settings - Smurfm3u</PageTitle>
+
+<h1>Settings</h1>
+
+@if (message is not null)
+{
+    <div class="alert @(messageIsError ? "bad" : "ok")">@message</div>
+}
+
+@if (settings is null)
+{
+    <div class="card empty">Loading...</div>
+}
+else
+{
+    <div class="card">
+        <h2 style="margin-top:0">Connection</h2>
+
+        <div class="field">
+            <label>API key</label>
+            <div class="actions">
+                <input value="@settings.ApiKey" readonly class="mono" />
+                <button @onclick="RegenerateApiKeyAsync">Regenerate</button>
+            </div>
+            <div class="hint">Used by both the Newznab and SABnzbd endpoints.</div>
+        </div>
+
+        <div class="field">
+            <label>Endpoints</label>
+            <table>
+                <tbody>
+                <tr>
+                    <td>Newznab (Prowlarr)</td>
+                    <td class="mono">@BaseUrl/api</td>
+                </tr>
+                <tr>
+                    <td>SABnzbd (Sonarr / Radarr)</td>
+                    <td class="mono">@BaseUrl &mdash; leave the URL base empty</td>
+                </tr>
+                </tbody>
+            </table>
+            <div class="hint">
+                Both APIs answer on /api; a SABnzbd request is told apart by its "mode" parameter.
+                /newznab/api and /sabnzbd/api work too if you would rather be explicit.
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 style="margin-top:0">Downloads</h2>
+
+        <div class="field-grid">
+            <div class="field">
+                <label>Incomplete directory</label>
+                <input @bind="settings.IncompletePath" />
+            </div>
+            <div class="field">
+                <label>Complete directory</label>
+                <input @bind="settings.CompletePath" />
+                <div class="hint">Reported to Sonarr and Radarr as SABnzbd's complete_dir.</div>
+            </div>
+            <div class="field">
+                <label>Max simultaneous downloads</label>
+                <input type="number" @bind="settings.MaxConcurrentDownloads" />
+                <div class="hint">Across all playlists.</div>
+            </div>
+            <div class="field">
+                <label>Retry attempts</label>
+                <input type="number" @bind="settings.MaxDownloadAttempts" />
+            </div>
+            <div class="field">
+                <label>TV category</label>
+                <input @bind="settings.TvCategory" />
+            </div>
+            <div class="field">
+                <label>Movie category</label>
+                <input @bind="settings.MovieCategory" />
+            </div>
+        </div>
+
+        <div class="field inline-field">
+            <input type="checkbox" id="deleteFailed" @bind="settings.DeleteFailedFiles" />
+            <label for="deleteFailed" style="margin:0">Delete partial files when a download fails for good</label>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 style="margin-top:0">Search results</h2>
+
+        <div class="field-grid">
+            <div class="field">
+                <label>Max results per query</label>
+                <input type="number" @bind="settings.MaxSearchResults" />
+            </div>
+            <div class="field">
+                <label>Assumed bitrate (kbps)</label>
+                <input type="number" @bind="settings.AssumedBitrateKbps" />
+                <div class="hint">Used with the runtime to estimate release size.</div>
+            </div>
+            <div class="field">
+                <label>Fallback size (MiB)</label>
+                <input type="number" @bind="settings.FallbackSizeMib" />
+                <div class="hint">When neither a size nor a runtime is known.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 style="margin-top:0">History retention</h2>
+
+        <div class="field-grid">
+            <div class="field">
+                <label>Keep search history for (days)</label>
+                <input type="number" @bind="settings.SearchHistoryRetentionDays" />
+                <div class="hint">0 keeps it forever.</div>
+            </div>
+            <div class="field">
+                <label>Keep download history for (days)</label>
+                <input type="number" @bind="settings.DownloadHistoryRetentionDays" />
+                <div class="hint">0 keeps it forever.</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2 style="margin-top:0">Speed limits</h2>
+
+        <div class="field" style="max-width:320px">
+            <label>Manual global limit (KiB/s)</label>
+            <input type="number" @bind="settings.ManualSpeedLimitKibps" />
+            <div class="hint">0 is unlimited. Sonarr and Radarr can change this through the SABnzbd API.</div>
+        </div>
+
+        <h3 style="font-size:.95rem">Scheduled limits</h3>
+        <p class="hint" style="margin-top:0">
+            The tightest active window wins. A window set to 0 KiB/s pauses downloading entirely.
+            Times are in the server's local time zone and may wrap past midnight.
+        </p>
+
+        @if (windows.Count > 0)
+        {
+            <table>
+                <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Days</th>
+                    <th>From</th>
+                    <th>To</th>
+                    <th class="numeric">KiB/s</th>
+                    <th>On</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach (var window in windows)
+                {
+                    <tr>
+                        <td><input @bind="window.Name" /></td>
+                        <td>
+                            <div class="actions">
+                                @foreach (var day in Days)
+                                {
+                                    <label class="inline-field" style="gap:.15rem">
+                                        <input type="checkbox"
+                                               checked="@SpeedLimitService.IsDaySet(window, day)"
+                                               @onchange="e => ToggleDay(window, day, e)" />
+                                        <span class="muted" style="font-size:.75rem">@day.ToString()[..2]</span>
+                                    </label>
+                                }
+                            </div>
+                        </td>
+                        <td><input type="time" value="@window.StartTime.ToString("HH\\:mm")"
+                                   @onchange="e => SetTime(window, isStart: true, e)" /></td>
+                        <td><input type="time" value="@window.EndTime.ToString("HH\\:mm")"
+                                   @onchange="e => SetTime(window, isStart: false, e)" /></td>
+                        <td class="numeric"><input type="number" @bind="window.LimitKibps" /></td>
+                        <td><input type="checkbox" @bind="window.Enabled" /></td>
+                        <td><button class="small danger" @onclick="() => RemoveWindow(window)">Remove</button></td>
+                    </tr>
+                }
+                </tbody>
+            </table>
+        }
+        else
+        {
+            <p class="muted">No scheduled limits. Downloads run unthrottled unless a manual limit is set.</p>
+        }
+
+        <div class="actions" style="margin-top:.75rem">
+            <button @onclick="AddWindow">Add window</button>
+        </div>
+    </div>
+
+    <div class="actions" style="margin-bottom:1.5rem">
+        <button class="primary" @onclick="SaveAsync">Save settings</button>
+    </div>
+
+    <div class="card">
+        <h2 style="margin-top:0">Change password</h2>
+
+        <div class="field-grid">
+            <div class="field">
+                <label>Current password</label>
+                <input type="password" @bind="currentPassword" autocomplete="current-password" />
+            </div>
+            <div class="field">
+                <label>New password</label>
+                <input type="password" @bind="newPassword" autocomplete="new-password" />
+            </div>
+            <div class="field">
+                <label>Confirm new password</label>
+                <input type="password" @bind="confirmPassword" autocomplete="new-password" />
+            </div>
+        </div>
+
+        <button @onclick="ChangePasswordAsync">Change password</button>
+    </div>
+}
+
+@code {
+    private static readonly DayOfWeek[] Days =
+    [
+        DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday,
+        DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday
+    ];
+
+    private ServiceSettings? settings;
+    private readonly List<SpeedLimitWindow> windows = [];
+    private readonly List<int> removedWindowIds = [];
+
+    private string currentPassword = string.Empty;
+    private string newPassword = string.Empty;
+    private string confirmPassword = string.Empty;
+
+    private string? message;
+    private bool messageIsError;
+
+    private string BaseUrl => Nav.BaseUri.TrimEnd('/');
+
+    protected override async Task OnInitializedAsync()
+    {
+        // A copy, so an abandoned edit never leaks into the live cached settings.
+        var current = await SettingsStore.GetAsync();
+        settings = Clone(current);
+
+        await using var db = await DbFactory.CreateDbContextAsync();
+        windows.AddRange(await db.SpeedLimits.AsNoTracking().OrderBy(x => x.Id).ToListAsync());
+    }
+
+    private async Task SaveAsync()
+    {
+        if (settings is null) return;
+
+        settings.MaxConcurrentDownloads = Math.Clamp(settings.MaxConcurrentDownloads, 1, 100);
+        settings.MaxDownloadAttempts = Math.Clamp(settings.MaxDownloadAttempts, 1, 20);
+        settings.MaxSearchResults = Math.Clamp(settings.MaxSearchResults, 1, 1000);
+        settings.ManualSpeedLimitKibps = Math.Max(0, settings.ManualSpeedLimitKibps);
+        settings.SearchHistoryRetentionDays = Math.Max(0, settings.SearchHistoryRetentionDays);
+        settings.DownloadHistoryRetentionDays = Math.Max(0, settings.DownloadHistoryRetentionDays);
+
+        await SettingsStore.SaveAsync(settings);
+
+        await using (var db = await DbFactory.CreateDbContextAsync())
+        {
+            if (removedWindowIds.Count > 0)
+                await db.SpeedLimits.Where(x => removedWindowIds.Contains(x.Id)).ExecuteDeleteAsync();
+
+            foreach (var window in windows)
+            {
+                window.LimitKibps = Math.Max(0, window.LimitKibps);
+
+                if (window.Id == 0)
+                    db.SpeedLimits.Add(window);
+                else
+                    db.SpeedLimits.Update(window);
+            }
+
+            await db.SaveChangesAsync();
+        }
+
+        removedWindowIds.Clear();
+        await SpeedLimits.RefreshAsync();
+
+        SetMessage("Settings saved.", isError: false);
+    }
+
+    private async Task RegenerateApiKeyAsync()
+    {
+        if (settings is null) return;
+
+        settings.ApiKey = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(16));
+        await SettingsStore.SaveAsync(settings);
+
+        SetMessage("New API key generated. Update Prowlarr, Sonarr and Radarr with it.", isError: false);
+    }
+
+    private void AddWindow() => windows.Add(new SpeedLimitWindow
+    {
+        Name = "Peak hours",
+        DaysOfWeek = 127,
+        StartTime = new TimeOnly(18, 0),
+        EndTime = new TimeOnly(23, 0),
+        LimitKibps = 2048,
+        Enabled = true
+    });
+
+    private void RemoveWindow(SpeedLimitWindow window)
+    {
+        if (window.Id != 0)
+            removedWindowIds.Add(window.Id);
+
+        windows.Remove(window);
+    }
+
+    private static void ToggleDay(SpeedLimitWindow window, DayOfWeek day, ChangeEventArgs e)
+    {
+        var bit = 1 << (int)day;
+
+        if (e.Value is true)
+            window.DaysOfWeek |= bit;
+        else
+            window.DaysOfWeek &= ~bit;
+    }
+
+    private static void SetTime(SpeedLimitWindow window, bool isStart, ChangeEventArgs e)
+    {
+        if (!TimeOnly.TryParse(e.Value?.ToString(), out var parsed)) return;
+
+        if (isStart) window.StartTime = parsed;
+        else window.EndTime = parsed;
+    }
+
+    private async Task ChangePasswordAsync()
+    {
+        // No length or complexity rules by choice: this is a single-admin, self-hosted tool
+        // and the password is whatever its owner wants it to be.
+        if (newPassword != confirmPassword)
+        {
+            SetMessage("The new passwords do not match.", isError: true);
+            return;
+        }
+
+        var state = await AuthState.GetAuthenticationStateAsync();
+        var username = state.User.Identity?.Name;
+
+        if (username is null || !await Users.ChangePasswordAsync(username, currentPassword, newPassword))
+        {
+            SetMessage("Your current password was not correct.", isError: true);
+            return;
+        }
+
+        currentPassword = newPassword = confirmPassword = string.Empty;
+        SetMessage("Password changed.", isError: false);
+    }
+
+    private void SetMessage(string text, bool isError)
+    {
+        message = text;
+        messageIsError = isError;
+    }
+
+    private static ServiceSettings Clone(ServiceSettings source) => new()
+    {
+        ApiKey = source.ApiKey,
+        IncompletePath = source.IncompletePath,
+        CompletePath = source.CompletePath,
+        MaxConcurrentDownloads = source.MaxConcurrentDownloads,
+        ManualSpeedLimitKibps = source.ManualSpeedLimitKibps,
+        SearchHistoryRetentionDays = source.SearchHistoryRetentionDays,
+        DownloadHistoryRetentionDays = source.DownloadHistoryRetentionDays,
+        TvCategory = source.TvCategory,
+        MovieCategory = source.MovieCategory,
+        MaxSearchResults = source.MaxSearchResults,
+        AssumedBitrateKbps = source.AssumedBitrateKbps,
+        FallbackSizeMib = source.FallbackSizeMib,
+        MaxDownloadAttempts = source.MaxDownloadAttempts,
+        DeleteFailedFiles = source.DeleteFailedFiles
+    };
+}
