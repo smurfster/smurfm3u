@@ -118,7 +118,9 @@ public class NewznabController(
         var total = results.Total;
         var apiKey = (await settingsService.GetAsync(ct)).ApiKey;
 
-        await RecordSearchAsync(kind, q, season, ep, cat, hits.Count, Stopwatch.GetElapsedTime(started), ct);
+        await RecordSearchAsync(
+            kind, q, season, ep, cat, offset, limit, hits.Count, results.Relaxed,
+            Stopwatch.GetElapsedTime(started), ct);
 
         var channel = new XElement("channel",
             new XElement(Atom + "link",
@@ -210,7 +212,7 @@ public class NewznabController(
 
     private async Task RecordSearchAsync(
         SearchKind kind, string? q, int? season, int? ep, string? cat,
-        int resultCount, TimeSpan elapsed, CancellationToken ct)
+        int offset, int limit, int resultCount, bool relaxed, TimeSpan elapsed, CancellationToken ct)
     {
         try
         {
@@ -223,7 +225,10 @@ public class NewznabController(
                 Season = season,
                 Episode = ep,
                 Categories = cat,
+                Offset = offset,
+                Limit = limit,
                 ResultCount = resultCount,
+                Relaxed = relaxed,
                 ElapsedMs = (int)elapsed.TotalMilliseconds,
                 ClientIp = HttpContext.Connection.RemoteIpAddress?.ToString(),
                 UserAgent = Request.Headers.UserAgent.ToString() is { Length: > 0 } ua ? ua : null,

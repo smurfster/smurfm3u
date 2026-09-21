@@ -19,8 +19,15 @@ public class SearchHistoryEntry
     /// <summary>Raw newznab category string as sent by the client, e.g. "5030,5040".</summary>
     public string? Categories { get; set; }
 
+    /// <summary>Paging as the client asked for it, which is what tells one page of a walk from the next.</summary>
+    public int Offset { get; set; }
+    public int Limit { get; set; }
+
     public int ResultCount { get; set; }
     public int ElapsedMs { get; set; }
+
+    /// <summary>The words were not all found and the closest entries were returned instead.</summary>
+    public bool Relaxed { get; set; }
 
     public string? ClientIp { get; set; }
     public string? UserAgent { get; set; }
