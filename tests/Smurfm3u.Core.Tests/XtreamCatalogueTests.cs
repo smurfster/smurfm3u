@@ -35,6 +35,49 @@ public class XtreamCatalogueTests
     }
 
     [Fact]
+    public void ReadsAnEpisodeWhoseInfoBlockCameBackAsAnEmptyArray()
+    {
+        // PHP encodes an empty map as [] rather than {}, so an episode the panel knows no
+        // runtime for arrives like this. It used to throw, and took the whole series with it.
+        var info = Parse<XtreamSeriesInfo>(
+            """{"episodes":{"1":[{"id":"5001","title":"Ep","episode_num":1,"container_extension":"mkv","info":[]}]}}""");
+
+        var episode = Assert.Single(
+            XtreamCatalogue.ForSeries(Series("""{"series_id":1,"name":"A Show"}"""), info, null, Panel));
+
+        Assert.Equal("http://line.example.com:8080/series/me/secret/5001.mkv", episode.Entry.Url);
+        Assert.Equal(0, episode.Entry.DurationSeconds);
+    }
+
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("null")]
+    [InlineData("\"\"")]
+    [InlineData("0")]
+    public void TreatsAnyInfoBlockThatIsNotAnObjectAsAbsent(string raw)
+    {
+        var episode = Parse<XtreamEpisode>(
+            "{\"id\":\"1\",\"episode_num\":1,\"info\":" + raw + "}");
+
+        Assert.Null(episode.Info);
+    }
+
+    [Fact]
+    public void StillReadsTheRuntimeWhenTheInfoBlockIsReal()
+    {
+        var episode = Parse<XtreamEpisode>("""{"id":"1","episode_num":1,"info":{"duration_secs":3600}}""");
+
+        Assert.Equal(3600, episode.Info?.DurationSeconds);
+    }
+
+    [Fact]
+    public void TreatsAnAccountBlockThatIsNotAnObjectAsAbsent()
+    {
+        Assert.Null(Parse<XtreamAuth>("""{"user_info":[]}""").UserInfo);
+        Assert.NotNull(Parse<XtreamAuth>("""{"user_info":{"auth":1}}""").UserInfo);
+    }
+
+    [Fact]
     public void TreatsAnEmptyEpisodeArrayAsNoEpisodes()
     {
         // Some panels send [] rather than {} for a series with nothing in it, which is the

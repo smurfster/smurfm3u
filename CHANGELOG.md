@@ -21,6 +21,10 @@ what the UI reports is always what was built.
 
 ### Fixed
 
+- An Xtream series whose episodes carry no runtime is **no longer skipped**. Panels are PHP,
+  and PHP encodes an empty map as `[]` rather than `{}`, so an episode's `info` block arrives
+  as an empty array whenever the panel knows no duration — which failed to parse and cost the
+  whole series. Any field documented as an object now reads that way, `user_info` included.
 - A playlist being refreshed now **says so**. The status column kept showing the previous
   run's outcome — "Failed", with its error underneath — next to a button already reading
   "Refreshing...", because the two read different things: the button watched the page, the
