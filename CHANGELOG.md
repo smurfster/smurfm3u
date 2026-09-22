@@ -9,7 +9,17 @@ what the UI reports is always what was built.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- A **light theme** alongside the dark one, with a toggle in the top bar. It follows the
+  system preference until a choice is made here, and then remembers that choice per browser.
+- **Icons** on the navigation links, drawn inline so there is nothing to fetch.
+
+### Changed
+
+- The signed-in user now reads `User: <name>` at the top left of the page itself rather than
+  in the navigation column, and **Sign out** has moved to the top right. Both sit in a bar
+  that stays put while the page scrolls.
 
 ## [1.0.0] - 2026-09-22
 

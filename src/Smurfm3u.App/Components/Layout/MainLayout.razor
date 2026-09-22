@@ -7,25 +7,42 @@
             <nav class="sidebar">
                 <div class="brand">Smurf<span>m3u</span></div>
                 <div class="nav">
-                    <NavLink href="" Match="NavLinkMatch.All">Dashboard</NavLink>
-                    <NavLink href="search">Search</NavLink>
-                    <NavLink href="queue">Queue</NavLink>
-                    <NavLink href="history">Download History</NavLink>
-                    <NavLink href="sources">Playlists</NavLink>
-                    <NavLink href="searches">Search History</NavLink>
-                    <NavLink href="settings">Settings</NavLink>
+                    <NavLink href="" Match="NavLinkMatch.All"><Icon Name="IconName.Dashboard" />Dashboard</NavLink>
+                    <NavLink href="search"><Icon Name="IconName.Search" />Search</NavLink>
+                    <NavLink href="queue"><Icon Name="IconName.Queue" />Queue</NavLink>
+                    <NavLink href="history"><Icon Name="IconName.DownloadHistory" />Download History</NavLink>
+                    <NavLink href="sources"><Icon Name="IconName.Playlists" />Playlists</NavLink>
+                    <NavLink href="searches"><Icon Name="IconName.SearchHistory" />Search History</NavLink>
+                    <NavLink href="settings"><Icon Name="IconName.Settings" />Settings</NavLink>
                 </div>
                 <div class="sidebar-footer">
-                    <div>@context.User.Identity?.Name</div>
                     <div class="version" title="@VersionTitle">@VersionLabel</div>
-                    <form action="/account/logout" method="post">
-                        <AntiforgeryToken />
-                        <button type="submit" class="small" style="margin-top:.4rem">Sign out</button>
-                    </form>
                 </div>
             </nav>
             <main class="content">
-                @Body
+                <header class="topbar">
+                    <div class="user">User: <strong>@context.User.Identity?.Name</strong></div>
+                    <div class="actions">
+                        @*
+                            Plain JavaScript rather than an @@onclick handler: the layout is
+                            rendered statically, so a Blazor handler here would never fire, and
+                            the theme is a client-side preference with nothing to tell the
+                            server about anyway.
+                        *@
+                        <button type="button" class="icon-button theme-toggle" onclick="toggleTheme()"
+                                title="Switch between the dark and light theme" aria-label="Switch theme">
+                            <Icon Name="IconName.Sun" Class="icon-sun" />
+                            <Icon Name="IconName.Moon" Class="icon-moon" />
+                        </button>
+                        <form action="/account/logout" method="post">
+                            <AntiforgeryToken />
+                            <button type="submit" class="small">Sign out</button>
+                        </form>
+                    </div>
+                </header>
+                <div class="page">
+                    @Body
+                </div>
             </main>
         </div>
     </Authorized>

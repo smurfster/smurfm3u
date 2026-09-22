@@ -5,6 +5,40 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
+
+    @*
+        Inline and before the stylesheet on purpose: a stored choice has to be on the element
+        before the first paint, or every page load flashes the other theme first. With nothing
+        stored the attribute stays off and the CSS follows the system preference.
+    *@
+    <script>
+        (function () {
+            try {
+                var stored = localStorage.getItem('smurfm3u-theme');
+                if (stored === 'light' || stored === 'dark') {
+                    document.documentElement.dataset.theme = stored;
+                }
+            } catch (e) {
+                // Storage blocked (private window, or cookies off): the system preference stands.
+            }
+        })();
+
+        function toggleTheme() {
+            var root = document.documentElement;
+            var current = root.dataset.theme
+                || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+            var next = current === 'light' ? 'dark' : 'light';
+
+            root.dataset.theme = next;
+
+            try {
+                localStorage.setItem('smurfm3u-theme', next);
+            } catch (e) {
+                // Not persisted, but the page still changes for as long as it is open.
+            }
+        }
+    </script>
+
     <ResourcePreloader />
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["Smurfm3u.App.styles.css"]" />
