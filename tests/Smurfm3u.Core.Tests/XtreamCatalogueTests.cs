@@ -209,6 +209,54 @@ public class XtreamCatalogueTests
         Assert.Empty(XtreamCatalogue.ForSeries(Series("""{"series_id":1,"name":""}"""), info, null, Panel));
     }
 
+    // ---- What lets a later refresh skip a series it has already read ----
+
+    [Theory]
+    [InlineData("1790085182", 1790085182L)]
+    [InlineData("null", null)]
+    [InlineData("\"\"", null)]
+    [InlineData("\"not a stamp\"", null)]
+    public void ReadsTheLastChangedStampHoweverThePanelSendsIt(string raw, long? expected)
+    {
+        var series = Parse<XtreamSeries>("{\"series_id\":1,\"name\":\"A Show\",\"last_modified\":" + raw + "}");
+
+        Assert.Equal(expected, series.LastModified);
+    }
+
+    [Fact]
+    public void ReadsTheStampWhenThePanelSendsItAsANumber()
+    {
+        Assert.Equal(1790085182L, Parse<XtreamSeries>("""{"series_id":1,"name":"A Show","last_modified":1790085182}""").LastModified);
+    }
+
+    [Fact]
+    public void CarriesTheSeriesAndItsStampOntoEveryEpisode()
+    {
+        // Without these on the episode there is no way to mark a series as still present
+        // without fetching it again, which is the whole point of storing them.
+        var series = Series("""{"series_id":99,"name":"Top Gear","last_modified":"1790085182"}""");
+        var info = Parse<XtreamSeriesInfo>("""{"episodes":{"1":[{"id":"1","episode_num":1},{"id":"2","episode_num":2}]}}""");
+
+        var episodes = XtreamCatalogue.ForSeries(series, info, null, Panel).ToList();
+
+        Assert.Equal(2, episodes.Count);
+        Assert.All(episodes, e =>
+        {
+            Assert.Equal("99", e.SeriesId);
+            Assert.Equal(1790085182L, e.SeriesLastModified);
+        });
+    }
+
+    [Fact]
+    public void LeavesAFilmWithNoSeriesToBelongTo()
+    {
+        var candidate = XtreamCatalogue.ForMovie(
+            Parse<XtreamVodStream>("""{"stream_id":1,"name":"A Film"}"""), null, Panel);
+
+        Assert.Null(candidate.SeriesId);
+        Assert.Null(candidate.SeriesLastModified);
+    }
+
     [Fact]
     public void MapsCategoryNamesById()
     {

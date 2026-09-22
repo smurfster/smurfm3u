@@ -26,6 +26,24 @@ public sealed class LooseStringConverter : JsonConverter<string?>
         writer.WriteStringValue(value);
 }
 
+/// <summary>As <see cref="LooseIntConverter"/>, for values too big for an int - unix stamps.</summary>
+public sealed class LooseLongConverter : JsonConverter<long?>
+{
+    public override long? Read(ref Utf8JsonReader reader, Type type, JsonSerializerOptions options) =>
+        reader.TokenType switch
+        {
+            JsonTokenType.Number => reader.TryGetInt64(out var number) ? number : null,
+            JsonTokenType.String => long.TryParse(reader.GetString(), out var parsed) ? parsed : null,
+            _ => null
+        };
+
+    public override void Write(Utf8JsonWriter writer, long? value, JsonSerializerOptions options)
+    {
+        if (value is null) writer.WriteNullValue();
+        else writer.WriteNumberValue(value.Value);
+    }
+}
+
 /// <summary>As <see cref="LooseStringConverter"/>, for the numbers. Blank and "n/a" read as null.</summary>
 public sealed class LooseIntConverter : JsonConverter<int?>
 {
@@ -140,6 +158,14 @@ public sealed class XtreamSeries
     [JsonPropertyName("cover")][JsonConverter(typeof(LooseStringConverter))] public string? Cover { get; init; }
     [JsonPropertyName("category_id")][JsonConverter(typeof(LooseStringConverter))] public string? CategoryId { get; init; }
     [JsonPropertyName("releaseDate")][JsonConverter(typeof(LooseStringConverter))] public string? ReleaseDate { get; init; }
+
+    /// <summary>
+    /// When the panel says the series last changed. The whole point of reading it is to avoid
+    /// asking for an episode list that cannot have changed since the last refresh.
+    /// </summary>
+    [JsonPropertyName("last_modified")]
+    [JsonConverter(typeof(LooseLongConverter))]
+    public long? LastModified { get; init; }
 }
 
 public sealed class XtreamSeriesInfo

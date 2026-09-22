@@ -79,7 +79,11 @@ public static class XtreamCatalogue
                 };
 
                 yield return new IngestCandidate(
-                    entry, new VodVerdict(true, MediaKind.Series, extension, "xtream series episode"), parsed);
+                    entry,
+                    new VodVerdict(true, MediaKind.Series, extension, "xtream series episode"),
+                    parsed,
+                    series.SeriesId,
+                    series.LastModified);
             }
         }
     }

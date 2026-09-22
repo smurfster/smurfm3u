@@ -45,6 +45,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.SearchTitle).HasMaxLength(500);
             e.Property(x => x.EpisodeTitle).HasMaxLength(500);
             e.Property(x => x.Extension).HasMaxLength(10);
+            e.Property(x => x.SeriesId).HasMaxLength(64);
+
+            // Both sides of the shortcut read through this: working out which series are
+            // already known, and marking a whole series as still present without re-reading it.
+            e.HasIndex(x => new { x.SourceId, x.SeriesId });
 
             e.HasOne(x => x.Source)
                 .WithMany(x => x.Items)

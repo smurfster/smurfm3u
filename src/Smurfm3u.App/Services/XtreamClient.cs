@@ -74,8 +74,24 @@ public class XtreamClient(
     /// when the source asks for them. Nothing live is requested, so unlike a playlist there is
     /// nothing to filter back out afterwards.
     /// </summary>
+    /// <summary>
+    /// Series left alone this run because the panel says they have not changed. Their episodes
+    /// were never fetched, so the caller has to keep them alive itself or the reconcile will
+    /// retire the lot.
+    /// </summary>
+    public IReadOnlyCollection<string> UnchangedSeries => unchanged;
+
+    private readonly List<string> unchanged = [];
+
+    /// <param name="known">
+    /// What the panel last said each series changed at, from the previous refresh. Empty forces
+    /// every episode list to be read, which is what a full walk wants.
+    /// </param>
     public async IAsyncEnumerable<IngestCandidate> EnumerateAsync(
-        M3uSource source, XtreamCredentials credentials, [EnumeratorCancellation] CancellationToken ct = default)
+        M3uSource source,
+        XtreamCredentials credentials,
+        IReadOnlyDictionary<string, long> known,
+        [EnumeratorCancellation] CancellationToken ct = default)
     {
         var client = httpClientFactory.CreateClient("playlist");
         var headers = source.Headers;
@@ -126,7 +142,31 @@ public class XtreamClient(
             source.Name, Count(series.Count, "series", "series"),
             Count(seriesCategories.Count, "category", "categories"), CurrentBatchSize);
 
-        var readable = series.Where(x => !string.IsNullOrWhiteSpace(x.SeriesId)).ToList();
+        // A series the panel says has not changed since we last read it cannot have new
+        // episodes, and its episode list is one request each. This is the difference between
+        // asking thirty thousand times and asking about the handful that actually moved.
+        var readable = new List<XtreamSeries>();
+
+        foreach (var candidate in series)
+        {
+            if (string.IsNullOrWhiteSpace(candidate.SeriesId)) continue;
+
+            if (candidate.LastModified is { } stamp
+                && known.TryGetValue(candidate.SeriesId, out var seen)
+                && seen == stamp)
+            {
+                unchanged.Add(candidate.SeriesId);
+                continue;
+            }
+
+            readable.Add(candidate);
+        }
+
+        if (unchanged.Count > 0)
+            logger.LogInformation(
+                "{Source}: {Unchanged} series unchanged since the last refresh, {Reading} to read",
+                source.Name, unchanged.Count, readable.Count);
+
         var done = 0;
         var nextReport = ProgressEvery;
 

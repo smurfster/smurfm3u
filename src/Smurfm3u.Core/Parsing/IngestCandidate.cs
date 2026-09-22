@@ -10,4 +10,14 @@ namespace Smurfm3u.Core.Parsing;
 /// episode outright, which is better than anything that can be read back out of a name; a
 /// playlist file states nothing, so there it is always null.
 /// </param>
-public sealed record IngestCandidate(M3uEntry Entry, VodVerdict Verdict, ParsedTitle? Parsed = null);
+/// <param name="SeriesId">
+/// Which series an episode belongs to on the panel, so a later refresh can keep the whole
+/// series alive without asking about it again. Null for anything that is not a panel episode.
+/// </param>
+/// <param name="SeriesLastModified">What the panel said that series was last changed at.</param>
+public sealed record IngestCandidate(
+    M3uEntry Entry,
+    VodVerdict Verdict,
+    ParsedTitle? Parsed = null,
+    string? SeriesId = null,
+    long? SeriesLastModified = null);

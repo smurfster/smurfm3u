@@ -15,6 +15,11 @@ Nothing yet.
 
 ### Added
 
+- An Xtream refresh now reads **only the series that changed**. The panel already says when
+  each series last changed, so the episode list is fetched only where it has moved: on a panel
+  of 30,000 series that is hours of requests replaced by a handful. Episodes of a series left
+  alone are kept without being re-read, and one run a week reads everything regardless so a
+  panel that neglects its own stamps cannot hide new episodes indefinitely.
 - **Xtream panel playlists**, read through the panel's player API instead of as an m3u. The
   panel states the season, episode, episode title, container and runtime outright, so none of
   it has to be read back out of an entry name, and nothing live is requested in the first

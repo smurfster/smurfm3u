@@ -26,6 +26,19 @@ public class M3uItem
     /// <summary>Runtime in seconds from #EXTINF, when the playlist provides one.</summary>
     public int DurationSeconds { get; set; }
 
+    /// <summary>
+    /// Which series this episode belongs to on the panel it came from. Null for a film and for
+    /// anything read out of a playlist file. It is what lets a refresh mark a whole series as
+    /// still present without asking the panel about it again.
+    /// </summary>
+    public string? SeriesId { get; set; }
+
+    /// <summary>
+    /// What the panel said the series was last changed at, as it said it. Compared against the
+    /// next refresh to decide whether the episode list is worth fetching at all.
+    /// </summary>
+    public long? SeriesLastModified { get; set; }
+
     public MediaKind Kind { get; set; }
 
     /// <summary>Cleaned show/film title, e.g. "Top Gear".</summary>

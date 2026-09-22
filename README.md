@@ -297,6 +297,18 @@ episode list is one request per series, and a panel may carry thousands. They ar
 few at a time, and progress goes to the log every 200 series. If that is more than you want
 on a six-hourly schedule, turn **Include series** off and the films still refresh in seconds.
 
+**Only the series that changed are read.** `get_series` is one request and already tells us
+when each series last changed, so a refresh compares that against what it stored last time
+and asks for the episode list only where it has moved. On a panel of 30,000 series that is
+the difference between 30,000 requests and a handful: hours become minutes.
+
+The episodes of a series that was left alone are marked as still present without being
+fetched, so nothing is retired for not having been asked about.
+
+> **A panel that does not keep its own `last_modified` current would hide new episodes.** So
+> the stamps are trusted for a week at a time: one run every seven days ignores them and reads
+> every series, which puts right anything that drifted. The log says which kind of run it is.
+
 **If the panel pushes back, the refresh eases off rather than losing content.** A `429 Too
 Many Requests` is not a missing series, it is a panel asking to be asked more slowly: the
 request waits and is tried again, honouring the panel's own `Retry-After` where it sends one,
