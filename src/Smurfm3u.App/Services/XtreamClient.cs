@@ -15,6 +15,9 @@ public class XtreamClient(IHttpClientFactory httpClientFactory, TimeProvider clo
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
+    /// <summary>Series between progress lines during the episode walk.</summary>
+    private const int ProgressEvery = 200;
+
     /// <summary>Retries of a refused request before it counts as a real failure.</summary>
     private const int MaxAttempts = 4;
 
@@ -113,6 +116,7 @@ public class XtreamClient(IHttpClientFactory httpClientFactory, TimeProvider clo
 
         var readable = series.Where(x => !string.IsNullOrWhiteSpace(x.SeriesId)).ToList();
         var done = 0;
+        var nextReport = ProgressEvery;
 
         // Taken a slice at a time rather than pre-chunked, because the size shrinks if the
         // panel starts refusing and a chunked sequence has already decided how it is split.
@@ -139,8 +143,15 @@ public class XtreamClient(IHttpClientFactory httpClientFactory, TimeProvider clo
             done += batch.Count;
 
             // A panel with thousands of series takes a while, and a silent hour reads as a hang.
-            if (done % 200 == 0)
-                logger.LogInformation("{Source}: {Done} of {Total} series read", source.Name, done, series.Count);
+            // Counted to the next milestone rather than checked for a multiple: the batch size
+            // changes with the panel's mood, so a run of threes steps straight over every
+            // multiple of two hundred and the walk goes quiet while it is still working.
+            if (done >= nextReport)
+            {
+                logger.LogInformation("{Source}: {Done} of {Total} series read", source.Name, done, readable.Count);
+
+                while (nextReport <= done) nextReport += ProgressEvery;
+            }
         }
     }
 
