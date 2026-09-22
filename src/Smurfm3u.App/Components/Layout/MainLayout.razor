@@ -17,7 +17,7 @@
                 </div>
                 <div class="sidebar-footer">
                     <div>@context.User.Identity?.Name</div>
-                    <div class="version" title="@VersionTitle">v@AppVersion.Display</div>
+                    <div class="version" title="@VersionTitle">@VersionLabel</div>
                     <form action="/account/logout" method="post">
                         <AntiforgeryToken />
                         <button type="submit" class="small" style="margin-top:.4rem">Sign out</button>
@@ -36,6 +36,11 @@
 </AuthorizeView>
 
 @code {
+    // Built here rather than as "v@AppVersion.Display" in the markup: Razor reads a letter,
+    // an @ and something dotted as an email address and emits it as text, so that rendered
+    // the expression itself instead of the version.
+    private static string VersionLabel => $"v{AppVersion.Display}";
+
     // Only worth showing when there is one; a build from outside a checkout has no commit.
     private static string? VersionTitle =>
         AppVersion.Commit is { } commit ? $"Built from {commit}" : null;
