@@ -54,6 +54,13 @@ a:hover {
     min-height: 100vh;
 }
 
+/*
+    Pinned rather than stretched. As a plain flex item it grew to the height of the page, so
+    on a long one - settings, a full history - the footer sat thousands of pixels down and the
+    username and Sign out button were only reachable by scrolling to the very bottom.
+    Sticking it to the viewport keeps them in view, and the nav scrolls on its own if it ever
+    outgrows the height.
+*/
 .sidebar {
     width: 210px;
     flex-shrink: 0;
@@ -61,6 +68,11 @@ a:hover {
     border-right: 1px solid var(--border);
     display: flex;
     flex-direction: column;
+    position: sticky;
+    top: 0;
+    align-self: flex-start;
+    height: 100vh;
+    overflow-y: auto;
 }
 
 .brand {
@@ -447,7 +459,8 @@ input[type=checkbox] {
 
 @media (max-width: 720px) {
     .shell { flex-direction: column; }
-    .sidebar { width: 100%; }
+    /* Stacked, so it scrolls away with the page rather than holding a column of the screen. */
+    .sidebar { width: 100%; position: static; height: auto; overflow-y: visible; }
     .nav { display: flex; flex-wrap: wrap; }
     .nav a { border-left: none; border-bottom: 3px solid transparent; }
     .nav a.active { border-left: none; border-bottom-color: var(--accent); }
