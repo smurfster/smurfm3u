@@ -22,6 +22,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             e.Property(x => x.Name).HasMaxLength(200).IsRequired();
             e.Property(x => x.Location).HasMaxLength(2048).IsRequired();
+            e.Property(x => x.Username).HasMaxLength(200);
+            e.Property(x => x.Password).HasMaxLength(200);
             e.Property(x => x.QualityTag).HasMaxLength(50);
             e.Property(x => x.ResolutionTag).HasMaxLength(50);
             e.Property(x => x.ReleaseGroup).HasMaxLength(50);

@@ -11,8 +11,24 @@ public class M3uSource
 
     public M3uSourceKind Kind { get; set; } = M3uSourceKind.Remote;
 
-    /// <summary>Absolute URL for <see cref="M3uSourceKind.Remote"/>, container path for Local.</summary>
+    /// <summary>
+    /// Absolute URL for <see cref="M3uSourceKind.Remote"/>, container path for Local, and the
+    /// panel's address for <see cref="M3uSourceKind.Xtream"/>.
+    /// </summary>
     public string Location { get; set; } = string.Empty;
+
+    /// <summary>Panel login for <see cref="M3uSourceKind.Xtream"/>; unused by the other kinds.</summary>
+    public string? Username { get; set; }
+
+    /// <summary>Stored as written, because the panel has to be presented with it. See the README.</summary>
+    public string? Password { get; set; }
+
+    /// <summary>
+    /// Whether an Xtream refresh walks the series catalogue as well as the films. The episode
+    /// list is one request per series, so a panel with thousands of them takes a long time;
+    /// turning this off keeps the films, which are a single request.
+    /// </summary>
+    public bool IncludeSeries { get; set; } = true;
 
     public bool Enabled { get; set; } = true;
 

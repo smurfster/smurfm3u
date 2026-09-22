@@ -252,7 +252,9 @@ Add them under **Playlists**. Each one has:
 
 | Option | What it does |
 | --- | --- |
-| Type / Location | A remote URL, or a local file. **Browse** lists the playlist directory so the path does not have to be typed |
+| Type / Location | A remote URL, a local file, or an [Xtream panel](#xtream-panels). **Browse** lists the playlist directory so a path does not have to be typed |
+| Username / password | Xtream panels only, and only shown for them |
+| Include series | Xtream panels only. Off reads the films and skips the episode walk |
 | Enabled | Disabled playlists are ignored by search and by the scheduler |
 | Quality / resolution / group tags | Appended to every release name from this playlist, e.g. `…1080p.WEB-DL-Smurfm3u`. The resolution tag also picks the Newznab subcategory |
 | Simultaneous downloads | Per-playlist cap, under the global cap in Settings |
@@ -263,6 +265,49 @@ Add them under **Playlists**. Each one has:
 
 **Force update** is the *Refresh* button on each row. A newly added playlist refreshes
 immediately.
+
+### Xtream panels
+
+A provider that hands out a username, a password and a server address is running an Xtream
+Codes panel. Add it with **Type → Xtream panel** and it is read through the panel's own API
+rather than as a playlist.
+
+That is worth doing because the panel *states* what a playlist leaves to guesswork:
+
+| | Playlist (`get.php`) | Xtream panel |
+| --- | --- | --- |
+| Season and episode | Read back out of the entry name, when it is in there at all | Given by the panel |
+| Episode titles | Whatever is in the name | Given by the panel |
+| Container (`mkv`, `mp4`) | Guessed from the URL | Given by the panel |
+| Runtime | Only if the playlist sets one | Given by the panel |
+| Live channels | Downloaded, then filtered back out | Never requested |
+
+Fill in the address and credentials, then use **Test connection** to check them before saving.
+It reports what the panel says about the account, which is how an expired line tells you what
+is wrong.
+
+| Field | Notes |
+| --- | --- |
+| Panel address | `http://line.example.com:8080`. Pasting the whole `get.php` link works: the credentials are taken from it, and only the address is stored |
+| Username / password | As the provider issued them. Leave blank if the address already carries them |
+| Include series | Off keeps the films only &mdash; see below |
+
+**Series take longer than films.** The panel returns every film in one request, but the
+episode list is one request per series, and a panel may carry thousands. They are fetched a
+few at a time, and progress goes to the log every 200 series. If that is more than you want
+on a six-hourly schedule, turn **Include series** off and the films still refresh in seconds.
+
+A series that fails to load is logged and skipped rather than failing the whole refresh; one
+bad entry out of thousands is not worth losing the rest.
+
+> The panel password is stored as written, in the playlist's row. That is what the panel has
+> to be presented with, so it cannot be hashed. Treat a database backup as containing a
+> credential, as with the SMTP and proxy passwords.
+
+You do not have to use this. A panel's `get.php` link still works as a plain **Remote URL**
+playlist, and always did &mdash; the URL layout panels use is one of the signals the VOD
+filter already reads. Xtream is the better option where the API is available; the m3u link is
+the fallback where it is not.
 
 ### What counts as VOD
 

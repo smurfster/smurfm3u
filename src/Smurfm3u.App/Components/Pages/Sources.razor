@@ -2,6 +2,7 @@
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.EntityFrameworkCore
 @using Smurfm3u.Core.Models
+@using Smurfm3u.Core.Xtream
 @using Smurfm3u.Data
 @attribute [Authorize]
 @rendermode InteractiveServer
@@ -44,12 +45,21 @@
                     <InputSelect @bind-Value="editing.Kind">
                         <option value="@M3uSourceKind.Remote">Remote URL</option>
                         <option value="@M3uSourceKind.Local">Local file</option>
+                        <option value="@M3uSourceKind.Xtream">Xtream panel</option>
                     </InputSelect>
+                    @if (editing.Kind == M3uSourceKind.Xtream)
+                    {
+                        <div class="hint">
+                            Read through the panel&#39;s API rather than as a playlist, so seasons,
+                            episodes and containers come from the provider instead of being read
+                            back out of entry names.
+                        </div>
+                    }
                 </div>
             </div>
 
             <div class="field">
-                <label>@(editing.Kind == M3uSourceKind.Local ? "File path inside the container" : "Playlist URL")</label>
+                <label>@LocationLabel(editing.Kind)</label>
 
                 @if (editing.Kind == M3uSourceKind.Local)
                 {
@@ -61,13 +71,41 @@
                     <InputText @bind-Value="editing.Location" />
                 }
 
-                <div class="hint">
-                    @(editing.Kind == M3uSourceKind.Local
-                        ? "Any path the container can read. Browse opens where this one points."
-                        : "The provider&#39;s get.php or .m3u8 link.")
-                </div>
+                <div class="hint">@LocationHint(editing.Kind)</div>
                 <ValidationMessage For="() => editing.Location" class="validation-message" />
             </div>
+
+            @if (editing.Kind == M3uSourceKind.Xtream)
+            {
+                <div class="field-grid">
+                    <div class="field">
+                        <label>Username</label>
+                        <InputText @bind-Value="editing.Username" />
+                        <div class="hint">Leave blank if the address above already carries it.</div>
+                    </div>
+
+                    <div class="field">
+                        <label>Password</label>
+                        <InputText type="password" @bind-Value="editing.Password" />
+                    </div>
+                </div>
+
+                <div class="field inline-field">
+                    <InputCheckbox id="includeSeries" @bind-Value="editing.IncludeSeries" />
+                    <label for="includeSeries" style="margin:0">Include series as well as films</label>
+                </div>
+                <div class="hint">
+                    The episode list is one request per series, so a panel with thousands of them
+                    takes a while to read. Films are a single request either way.
+                </div>
+
+                <div class="actions" style="margin-top:.75rem">
+                    <button type="button" @onclick="TestXtreamAsync" disabled="@testingPanel">
+                        @(testingPanel ? "Testing..." : "Test connection")
+                    </button>
+                    <span class="muted">Uses what is on screen; no need to save first.</span>
+                </div>
+            }
 
             <div class="field-grid">
                 <div class="field">
@@ -217,6 +255,70 @@ else
 
     private string? message;
     private bool messageIsError;
+    private bool testingPanel;
+
+    private static string LocationLabel(M3uSourceKind kind) => kind switch
+    {
+        M3uSourceKind.Local => "File path inside the container",
+        M3uSourceKind.Xtream => "Panel address",
+        _ => "Playlist URL"
+    };
+
+    private static string LocationHint(M3uSourceKind kind) => kind switch
+    {
+        M3uSourceKind.Local => "Any path the container can read. Browse opens where this one points.",
+        M3uSourceKind.Xtream => "The panel's address, e.g. http://line.example.com:8080. "
+                                + "Pasting the whole get.php link works too: the credentials are taken from it.",
+        _ => "The provider's get.php or .m3u8 link."
+    };
+
+    /// <summary>
+    /// Checks the login with what is on screen, before anything is saved. Reports what the
+    /// panel says about the account, since an expired line answers this and then nothing else.
+    /// </summary>
+    private async Task TestXtreamAsync()
+    {
+        if (editing is null) return;
+
+        testingPanel = true;
+        try
+        {
+            if (!XtreamCredentials.TryCreate(editing.Location, editing.Username, editing.Password, out var creds, out var error))
+            {
+                SetMessage(error, isError: true);
+                return;
+            }
+
+            using var scope = ScopeFactory.CreateScope();
+            var client = scope.ServiceProvider.GetRequiredService<XtreamClient>();
+            var info = await client.AuthenticateAsync(creds, editing.Headers);
+
+            var detail = new List<string>();
+            if (info.Status is { Length: > 0 }) detail.Add(info.Status);
+            if (info.MaxConnections is { Length: > 0 }) detail.Add($"{info.MaxConnections} connections");
+            if (Expiry(info.Expires) is { } expires) detail.Add($"expires {expires:yyyy-MM-dd}");
+
+            SetMessage(
+                detail.Count > 0
+                    ? $"Connected to {creds.BaseUrl} ({string.Join(", ", detail)})."
+                    : $"Connected to {creds.BaseUrl}.",
+                isError: false);
+        }
+        catch (Exception ex)
+        {
+            SetMessage($"Could not connect: {ex.Message}", isError: true);
+        }
+        finally
+        {
+            testingPanel = false;
+        }
+    }
+
+    /// <summary>The panel reports expiry as a unix timestamp, or leaves it blank for no limit.</summary>
+    private static DateTimeOffset? Expiry(string? value) =>
+        long.TryParse(value, out var seconds) && seconds > 0
+            ? DateTimeOffset.FromUnixTimeSeconds(seconds)
+            : null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -328,7 +430,8 @@ else
             var result = await refresher.RefreshAsync(sourceId);
 
             SetMessage(
-                $"Found {result.VodEntries:N0} on-demand entries in {result.TotalEntries:N0} lines " +
+                // Not "lines": a panel is read as a catalogue, and has none.
+                $"Found {result.VodEntries:N0} on-demand of {result.TotalEntries:N0} entries " +
                 $"({result.Added:N0} new, {result.Deactivated:N0} gone) in {result.Elapsed.TotalSeconds:N1}s.",
                 isError: false);
         }
@@ -409,8 +512,12 @@ else
 
         public M3uSourceKind Kind { get; set; } = M3uSourceKind.Remote;
 
-        [Required(ErrorMessage = "Enter a URL or file path.")]
+        [Required(ErrorMessage = "Enter a URL, file path or panel address.")]
         public string Location { get; set; } = string.Empty;
+
+        public string? Username { get; set; }
+        public string? Password { get; set; }
+        public bool IncludeSeries { get; set; } = true;
 
         public bool Enabled { get; set; } = true;
         public string QualityTag { get; set; } = "WEB-DL";
@@ -428,6 +535,9 @@ else
             Name = source.Name,
             Kind = source.Kind,
             Location = source.Location,
+            Username = source.Username,
+            Password = source.Password,
+            IncludeSeries = source.IncludeSeries,
             Enabled = source.Enabled,
             QualityTag = source.QualityTag,
             ResolutionTag = source.ResolutionTag,
@@ -444,6 +554,21 @@ else
             source.Name = Name.Trim();
             source.Kind = Kind;
             source.Location = Location.Trim();
+            // Only meaningful for a panel, and left behind on a source switched away from one.
+            source.Username = Blank(Username);
+            source.Password = Blank(Password);
+            source.IncludeSeries = IncludeSeries;
+
+            // A pasted get.php link carries the credentials in its query string. Split them out
+            // and keep the bare address: stored once rather than twice, and the list of
+            // playlists shows an address rather than a password.
+            if (Kind == M3uSourceKind.Xtream
+                && XtreamCredentials.TryCreate(Location, Username, Password, out var panel, out _))
+            {
+                source.Location = panel.BaseUrl;
+                source.Username = panel.Username;
+                source.Password = panel.Password;
+            }
             source.Enabled = Enabled;
             source.QualityTag = QualityTag?.Trim() ?? string.Empty;
             source.ResolutionTag = ResolutionTag?.Trim() ?? string.Empty;
@@ -454,5 +579,8 @@ else
             source.RefreshCron = string.IsNullOrWhiteSpace(RefreshCron) ? null : RefreshCron.Trim();
             source.Headers = string.IsNullOrWhiteSpace(Headers) ? null : Headers.Trim();
         }
+
+        private static string? Blank(string? value) =>
+            string.IsNullOrWhiteSpace(value) ? null : value.Trim();
     }
 }

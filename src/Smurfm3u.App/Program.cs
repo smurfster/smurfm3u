@@ -32,6 +32,7 @@ builder.Services.AddScoped<UserService>();
 builder.Services.AddScoped<DownloadService>();
 builder.Services.AddScoped<SearchService>();
 builder.Services.AddScoped<SabnzbdHandler>();
+builder.Services.AddScoped<XtreamClient>();
 builder.Services.AddScoped<M3uRefreshService>();
 builder.Services.AddScoped<FileDownloader>();
 builder.Services.AddScoped<DatabaseInitializer>();

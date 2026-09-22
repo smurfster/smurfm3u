@@ -1,9 +1,11 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Smurfm3u.Core.Entities;
 using Smurfm3u.Core.Parsing;
+using Smurfm3u.Core.Xtream;
 using Smurfm3u.Data;
 
 namespace Smurfm3u.App.Services;
@@ -18,6 +20,7 @@ public sealed record RefreshResult(
 public class M3uRefreshService(
     IDbContextFactory<AppDbContext> dbFactory,
     IHttpClientFactory httpClientFactory,
+    XtreamClient xtream,
     TimeProvider clock,
     NotificationService notifications,
     ILogger<M3uRefreshService> logger)
@@ -72,20 +75,20 @@ public class M3uRefreshService(
             db.ChangeTracker.AutoDetectChangesEnabled = false;
             var pending = 0;
 
-            await using var stream = await OpenAsync(source, ct);
-            using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
-
-            await foreach (var entry in M3uParser.ParseAsync(reader, ct))
+            await foreach (var candidate in ReadAsync(source, ct))
             {
                 total++;
 
-                var verdict = VodClassifier.Classify(entry);
+                var (entry, verdict, stated) = candidate;
                 if (!verdict.IsVod) continue;
 
                 vod++;
 
                 var key = ItemKeyFor(entry.Url);
-                var parsed = ReleaseTitleParser.Parse(entry.DisplayName, verdict.Hint);
+
+                // A panel states the season and episode; a playlist leaves them to be read
+                // back out of the display name, which is the best that can be done there.
+                var parsed = stated ?? ReleaseTitleParser.Parse(entry.DisplayName, verdict.Hint);
 
                 if (existing.TryGetValue(key, out var id))
                 {
@@ -185,6 +188,32 @@ public class M3uRefreshService(
         item.LastSeenAt = stamp;
         item.IsActive = true;
         return item;
+    }
+
+    /// <summary>
+    /// Everything the source offers, however it has to be asked. A playlist is read as lines
+    /// and classified, because nothing in the M3U format says what is on demand; a panel is
+    /// asked for its on-demand content directly, so everything it returns already counts.
+    /// </summary>
+    private async IAsyncEnumerable<IngestCandidate> ReadAsync(
+        M3uSource source, [EnumeratorCancellation] CancellationToken ct)
+    {
+        if (source.Kind == M3uSourceKind.Xtream)
+        {
+            if (!XtreamCredentials.TryCreate(source.Location, source.Username, source.Password, out var creds, out var error))
+                throw new InvalidOperationException(error);
+
+            await foreach (var candidate in xtream.EnumerateAsync(source, creds, ct))
+                yield return candidate;
+
+            yield break;
+        }
+
+        await using var stream = await OpenAsync(source, ct);
+        using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
+
+        await foreach (var entry in M3uParser.ParseAsync(reader, ct))
+            yield return new IngestCandidate(entry, VodClassifier.Classify(entry));
     }
 
     private async Task<Stream> OpenAsync(M3uSource source, CancellationToken ct)

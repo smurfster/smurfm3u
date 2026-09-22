@@ -11,6 +11,11 @@ what the UI reports is always what was built.
 
 ### Added
 
+- **Xtream panel playlists**, read through the panel's player API instead of as an m3u. The
+  panel states the season, episode, episode title, container and runtime outright, so none of
+  it has to be read back out of an entry name, and nothing live is requested in the first
+  place. **Test connection** checks the login before saving, and a pasted `get.php` link is
+  accepted whole: the credentials are lifted out of it and only the address is kept.
 - A **light theme** alongside the dark one, with a toggle in the top bar. It follows the
   system preference until a choice is made here, and then remembers that choice per browser.
 - **Icons** on the navigation links, drawn inline so there is nothing to fetch.

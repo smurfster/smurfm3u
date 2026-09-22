@@ -3,7 +3,10 @@ namespace Smurfm3u.Core.Entities;
 public enum M3uSourceKind
 {
     Remote = 0,
-    Local = 1
+    Local = 1,
+
+    /// <summary>An Xtream Codes panel, read through its player API rather than as a playlist.</summary>
+    Xtream = 2
 }
 
 public enum MediaKind
