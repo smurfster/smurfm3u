@@ -628,6 +628,8 @@ input[type=checkbox] {
     .nav a { border-left: none; border-bottom: 3px solid transparent; }
     .nav a.active { border-left: none; border-bottom-color: var(--accent); }
     .topbar { padding: 0 1rem; }
+    /* The source is the first thing to go: the message is why anyone opened the page. */
+    .log-table th:nth-child(3), .log-table td:nth-child(3) { display: none; }
     .page { padding: 1rem; }
 }
 
@@ -766,6 +768,60 @@ input[type=checkbox] {
 
 .link-button:hover {
     text-decoration: underline;
+}
+
+/* ---- Logs ---- */
+
+/*
+    Fixed layout, because the message wraps anywhere to cope with URLs and paths, and that
+    makes its min-content width about one character. Left to size itself the table hands the
+    space to the three narrow columns and wraps the message two words at a time.
+*/
+.log-table {
+    table-layout: fixed;
+}
+
+.log-table th:nth-child(1), .log-table td:nth-child(1) { width: 5.5rem; }
+.log-table th:nth-child(2), .log-table td:nth-child(2) { width: 5.5rem; }
+.log-table th:nth-child(3), .log-table td:nth-child(3) { width: 10rem; }
+
+.log-table td {
+    vertical-align: top;
+    padding-top: 0.4rem;
+    padding-bottom: 0.4rem;
+}
+
+.log-time, .log-source {
+    white-space: nowrap;
+    color: var(--text-dim);
+}
+
+/* Long enough to read, short enough that it never pushes the message off the page. */
+.log-source {
+    max-width: 12rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.log-message {
+    font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+    font-size: 0.82rem;
+    /* Messages carry paths and URLs, which have nowhere to break on their own. */
+    overflow-wrap: anywhere;
+}
+
+/* A stack trace is worth having in full, but not worth the whole page. */
+.log-exception {
+    margin: 0.35rem 0 0;
+    padding: 0.5rem 0.65rem;
+    max-height: 14rem;
+    overflow: auto;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    color: var(--text-dim);
+    font-size: 0.78rem;
+    white-space: pre-wrap;
 }
 
 /* ---- Expanded search results ---- */

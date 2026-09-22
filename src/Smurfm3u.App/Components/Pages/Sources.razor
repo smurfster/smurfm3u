@@ -2,6 +2,7 @@
 @using System.ComponentModel.DataAnnotations
 @using Microsoft.EntityFrameworkCore
 @using Smurfm3u.Core.Models
+@using Smurfm3u.Core.Diagnostics
 @using Smurfm3u.Core.Xtream
 @using Smurfm3u.Data
 @attribute [Authorize]
@@ -10,6 +11,8 @@
 @inject M3uRefreshService Refresher
 @inject SettingsService SettingsStore
 @inject IServiceScopeFactory ScopeFactory
+@inject AuthenticationStateProvider AuthState
+@inject ILogger<Sources> Log
 
 <PageTitle>Playlists - Smurfm3u</PageTitle>
 
@@ -208,8 +211,9 @@ else
                     <td class="mono" style="max-width:280px;overflow:hidden;text-overflow:ellipsis">@source.Location</td>
                     <td class="mono">@TagPreview(source)</td>
                     <td>
-                        <span class="pill @StatusClass(source.LastRefreshStatus)">@StatusLabel(source.LastRefreshStatus)</span>
-                        @if (source.LastRefreshError is { Length: > 0 })
+                        <span class="pill @StatusClass(DisplayStatus(source))">@StatusLabel(DisplayStatus(source))</span>
+                        @* The last run's error, but not while the next one is under way. *@
+                        @if (!IsRefreshing(source) && source.LastRefreshError is { Length: > 0 })
                         {
                             <div class="muted" style="font-size:.8rem;max-width:280px">@source.LastRefreshError</div>
                         }
@@ -217,9 +221,9 @@ else
                     <td class="numeric">@source.VodEntries.ToString("N0") / @source.TotalEntries.ToString("N0")</td>
                     <td>
                         <div class="actions">
-                            <button class="small" disabled="@(refreshing.Contains(source.Id))"
+                            <button class="small" disabled="@IsRefreshing(source)"
                                     @onclick="() => RefreshAsync(source.Id)">
-                                @(refreshing.Contains(source.Id) ? "Refreshing..." : "Refresh")
+                                @(IsRefreshing(source) ? "Refreshing..." : "Refresh")
                             </button>
                             <button class="small" @onclick="() => ToggleAsync(source.Id)">
                                 @(source.Enabled ? "Disable" : "Enable")
@@ -298,6 +302,10 @@ else
             if (info.MaxConnections is { Length: > 0 }) detail.Add($"{info.MaxConnections} connections");
             if (Expiry(info.Expires) is { } expires) detail.Add($"expires {expires:yyyy-MM-dd}");
 
+            Log.LogInformation("{User} tested the panel at {Panel} as {PanelUser}: connected{Detail}",
+                user, creds.BaseUrl, creds.Username,
+                detail.Count > 0 ? $" ({string.Join(", ", detail)})" : string.Empty);
+
             SetMessage(
                 detail.Count > 0
                     ? $"Connected to {creds.BaseUrl} ({string.Join(", ", detail)})."
@@ -306,6 +314,9 @@ else
         }
         catch (Exception ex)
         {
+            Log.LogWarning(ex, "{User} tested the panel at {Location} and it failed",
+                user, SafeUrl.Redact(editing.Location));
+
             SetMessage($"Could not connect: {ex.Message}", isError: true);
         }
         finally
@@ -320,8 +331,21 @@ else
             ? DateTimeOffset.FromUnixTimeSeconds(seconds)
             : null;
 
+    /// <summary>Who is making the changes, so the log says who as well as what.</summary>
+    private string user = "someone";
+
+    private static string KindLabel(M3uSourceKind kind) => kind switch
+    {
+        M3uSourceKind.Local => "local file",
+        M3uSourceKind.Xtream => "Xtream panel",
+        _ => "remote playlist"
+    };
+
     protected override async Task OnInitializedAsync()
     {
+        var state = await AuthState.GetAuthenticationStateAsync();
+        user = state.User.Identity?.Name ?? "someone";
+
         // The picker opens at whichever folder is configured for playlists, not a guess.
         playlistFallback = (await SettingsStore.GetAsync()).PlaylistPath;
         await LoadAsync();
@@ -396,6 +420,16 @@ else
         if (editing.Id == 0)
             db.Sources.Add(entity);
 
+        // Asked of the change tracker before saving, while it still knows what moved. An added
+        // entity reports every property as modified, so the list is only meaningful on an edit.
+        var changed = editing.Id == 0
+            ? []
+            : db.Entry(entity).Properties
+                .Where(p => p.IsModified)
+                .Select(p => p.Metadata.Name)
+                .OrderBy(x => x, StringComparer.Ordinal)
+                .ToArray();
+
         try
         {
             await db.SaveChangesAsync();
@@ -403,11 +437,29 @@ else
         catch (DbUpdateException)
         {
             // The only unique constraint on the table is the name.
+            Log.LogWarning("{User} could not save playlist {Name}: the name is already taken", user, editing.Name);
             SetMessage($"A playlist called \"{editing.Name}\" already exists.", isError: true);
             return;
         }
 
         var isNew = editing.Id == 0;
+
+        if (isNew)
+        {
+            Log.LogInformation(
+                "{User} added playlist {Name}: {Kind} at {Location}, {Cron}, {Concurrency} at a time{Series}",
+                user, entity.Name, KindLabel(entity.Kind), SafeUrl.Redact(entity.Location),
+                string.IsNullOrWhiteSpace(entity.RefreshCron) ? "manual refresh only" : $"cron {entity.RefreshCron}",
+                entity.MaxConcurrentDownloads,
+                entity.Kind == M3uSourceKind.Xtream && !entity.IncludeSeries ? ", films only" : string.Empty);
+        }
+        else
+        {
+            // The field names, never their values: one of them is the panel password.
+            Log.LogInformation("{User} updated playlist {Name}: changed {Fields}",
+                user, entity.Name, changed.Length == 0 ? "nothing" : string.Join(", ", changed));
+        }
+
         SetMessage(isNew ? $"Added {entity.Name}." : $"Saved {entity.Name}.", isError: false);
         editing = null;
 
@@ -421,6 +473,9 @@ else
     private async Task RefreshAsync(int sourceId)
     {
         if (!refreshing.Add(sourceId)) return;
+
+        var name = sources.FirstOrDefault(x => x.Id == sourceId)?.Name ?? sourceId.ToString();
+        Log.LogInformation("{User} asked for a refresh of {Name}", user, name);
 
         try
         {
@@ -437,6 +492,7 @@ else
         }
         catch (Exception ex)
         {
+            // The service has already logged the detail and recorded it against the source.
             SetMessage($"Refresh failed: {ex.Message}", isError: true);
         }
         finally
@@ -454,6 +510,11 @@ else
 
         source.Enabled = !source.Enabled;
         await db.SaveChangesAsync();
+
+        Log.LogInformation("{User} {Action} playlist {Name}{Effect}",
+            user, source.Enabled ? "enabled" : "disabled", source.Name,
+            source.Enabled ? string.Empty : "; it is now skipped by search and by the scheduler");
+
         await LoadAsync();
     }
 
@@ -463,9 +524,15 @@ else
         var source = await db.Sources.FirstOrDefaultAsync(x => x.Id == sourceId);
         if (source is null) return;
 
+        // Counted before the delete, because afterwards there is nothing left to count.
+        var entries = await db.Items.CountAsync(x => x.SourceId == sourceId);
+
         // Entries cascade; finished downloads keep their rows with a null source.
         db.Sources.Remove(source);
         await db.SaveChangesAsync();
+
+        Log.LogWarning("{User} deleted playlist {Name} and its {Entries} entries",
+            user, source.Name, entries);
 
         SetMessage($"Deleted {source.Name} and its entries.", isError: false);
         await LoadAsync();
@@ -485,6 +552,28 @@ else
         var tags = string.Join('.', parts);
         return string.IsNullOrWhiteSpace(source.ReleaseGroup) ? tags : $"{tags}-{source.ReleaseGroup}";
     }
+
+    /// <summary>
+    /// Whether this playlist is being read right now, from either of the two things that know:
+    /// a refresh this page started, and one already running when the row was loaded - which is
+    /// what a scheduled refresh looks like from here.
+    /// </summary>
+    /// <remarks>
+    /// Both the button and the status pill go through this. They used to disagree: the button
+    /// watched the page's own set, which updates the moment it is clicked, while the pill read
+    /// the status off a row loaded before the run started and not re-read until it ended. So a
+    /// playlist that had failed kept saying "Failed" next to a button saying "Refreshing...".
+    /// <para>
+    /// The stored status disables the button as well, which is safe because a source left
+    /// marked Running by a crash is reset at startup; without that it would be a row nobody
+    /// could ever refresh again.
+    /// </para>
+    /// </remarks>
+    private bool IsRefreshing(M3uSource source) =>
+        refreshing.Contains(source.Id) || source.LastRefreshStatus == RefreshStatus.Running;
+
+    private RefreshStatus DisplayStatus(M3uSource source) =>
+        IsRefreshing(source) ? RefreshStatus.Running : source.LastRefreshStatus;
 
     private static string StatusLabel(RefreshStatus status) => status switch
     {

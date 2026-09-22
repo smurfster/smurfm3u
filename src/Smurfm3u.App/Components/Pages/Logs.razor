@@ -1,0 +1,214 @@
+@page "/logs"
+@using System.Collections.Concurrent
+@using Smurfm3u.Core.Diagnostics
+@attribute [Authorize]
+@rendermode InteractiveServer
+@implements IDisposable
+@inject LogRing Ring
+
+<PageTitle>Logs - Smurfm3u</PageTitle>
+
+<div class="page-header">
+    <h1>Logs</h1>
+    <div class="actions">
+        <select @bind="minimum" @bind:after="Rebuild" style="width:auto">
+            <option value="@LogLevel.Trace">All levels</option>
+            <option value="@LogLevel.Debug">Debug and above</option>
+            <option value="@LogLevel.Information">Information and above</option>
+            <option value="@LogLevel.Warning">Warnings and errors</option>
+            <option value="@LogLevel.Error">Errors only</option>
+        </select>
+        <input placeholder="Filter" @bind="filter" @bind:event="oninput" @bind:after="Rebuild" style="width:180px" />
+        <button class="@(paused ? "primary" : "")" @onclick="TogglePause">
+            @(paused ? "Resume" : "Pause")
+        </button>
+        <button class="danger" @onclick="ClearAsync">Clear</button>
+    </div>
+</div>
+
+<p class="hint">
+    The last @Ring.Capacity.ToString("N0") lines, as they are written. Kept in memory only, so a
+    restart starts an empty page &mdash; and everything here is in the container's log as well.
+    Newest first, which is why nothing scrolls away while you read it.
+</p>
+
+@if (rows.Count == 0)
+{
+    <div class="card empty">
+        @(Ring.Snapshot().Count == 0 ? "Nothing logged yet." : "Nothing matches that filter.")
+    </div>
+}
+else
+{
+    <div class="card" style="padding:0">
+        <table class="log-table">
+            <thead>
+            <tr>
+                <th>Time</th>
+                <th>Level</th>
+                <th>Source</th>
+                <th>Message</th>
+            </tr>
+            </thead>
+            <tbody>
+            @* Keyed, so a line arriving at the top does not re-render every line below it. *@
+            @foreach (var entry in rows)
+            {
+                <tr @key="entry.Sequence">
+                    <td class="mono log-time">@entry.At.ToLocalTime().ToString("HH:mm:ss")</td>
+                    <td><span class="pill @LevelClass(entry.Level)">@LevelLabel(entry.Level)</span></td>
+                    <td class="mono log-source" title="@entry.Category">@entry.Source</td>
+                    <td class="log-message">
+                        @entry.Message
+                        @if (entry.Exception is { Length: > 0 } detail)
+                        {
+                            <pre class="log-exception">@detail</pre>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    /// <summary>
+    /// How often the view catches up. A refresh can write faster than a circuit can usefully
+    /// repaint, so lines are collected and applied in batches rather than one render each.
+    /// </summary>
+    private static readonly TimeSpan Tick = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>Kept below the ring's own limit: a page this long is scrolled, not read.</summary>
+    private const int MaxRows = 500;
+
+    private readonly List<LogEntry> rows = [];
+
+    /// <summary>Written from whichever thread logged, drained on the timer.</summary>
+    private readonly ConcurrentQueue<LogEntry> incoming = new();
+
+    private readonly CancellationTokenSource closing = new();
+
+    private LogLevel minimum = LogLevel.Information;
+    private string filter = string.Empty;
+    private bool paused;
+
+    protected override void OnInitialized()
+    {
+        Rebuild();
+
+        Ring.Written += OnWritten;
+        _ = PumpAsync();
+    }
+
+    /// <summary>
+    /// Called on the logging thread, so it does no more than hand the line over: touching
+    /// component state or rendering from here would be off the circuit's own context.
+    /// </summary>
+    private void OnWritten(LogEntry entry)
+    {
+        if (paused) return;
+
+        incoming.Enqueue(entry);
+    }
+
+    private async Task PumpAsync()
+    {
+        using var timer = new PeriodicTimer(Tick);
+
+        try
+        {
+            while (await timer.WaitForNextTickAsync(closing.Token))
+            {
+                if (incoming.IsEmpty) continue;
+
+                var arrived = new List<LogEntry>();
+                while (incoming.TryDequeue(out var entry))
+                {
+                    if (entry.Matches(minimum, filter)) arrived.Add(entry);
+                }
+
+                if (arrived.Count == 0) continue;
+
+                // Newest first, so the reverse of the order they arrived in.
+                arrived.Reverse();
+                rows.InsertRange(0, arrived);
+                Trim();
+
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The page has gone.
+        }
+    }
+
+    /// <summary>Re-reads the ring, for when the filter changes rather than the log.</summary>
+    private void Rebuild()
+    {
+        rows.Clear();
+
+        foreach (var entry in Ring.Snapshot())
+        {
+            if (entry.Matches(minimum, filter)) rows.Insert(0, entry);
+        }
+
+        Trim();
+    }
+
+    private void Trim()
+    {
+        if (rows.Count > MaxRows) rows.RemoveRange(MaxRows, rows.Count - MaxRows);
+    }
+
+    /// <summary>
+    /// Pausing drops what arrives rather than queueing it, so resuming shows what is happening
+    /// now instead of replaying a backlog. The ring still has it all, so resuming re-reads.
+    /// </summary>
+    private void TogglePause()
+    {
+        paused = !paused;
+
+        if (!paused)
+        {
+            incoming.Clear();
+            Rebuild();
+        }
+    }
+
+    private async Task ClearAsync()
+    {
+        Ring.Clear();
+        incoming.Clear();
+        rows.Clear();
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static string LevelLabel(LogLevel level) => level switch
+    {
+        LogLevel.Critical => "CRIT",
+        LogLevel.Error => "ERROR",
+        LogLevel.Warning => "WARN",
+        LogLevel.Information => "INFO",
+        LogLevel.Debug => "DEBUG",
+        _ => "TRACE"
+    };
+
+    private static string LevelClass(LogLevel level) => level switch
+    {
+        LogLevel.Critical or LogLevel.Error => "bad",
+        LogLevel.Warning => "warn",
+        LogLevel.Information => "busy",
+        _ => ""
+    };
+
+    public void Dispose()
+    {
+        Ring.Written -= OnWritten;
+
+        closing.Cancel();
+        closing.Dispose();
+    }
+}

@@ -56,7 +56,13 @@ public class XtreamClient(IHttpClientFactory httpClientFactory, ILogger<XtreamCl
         var client = httpClientFactory.CreateClient("playlist");
         var headers = source.Headers;
 
-        await AuthenticateAsync(credentials, headers, ct);
+        var account = await AuthenticateAsync(credentials, headers, ct);
+
+        logger.LogInformation(
+            "{Source}: panel at {Panel} accepted {User}, account {Status}{Connections}",
+            source.Name, credentials.BaseUrl, credentials.Username,
+            string.IsNullOrWhiteSpace(account.Status) ? "active" : account.Status,
+            account.MaxConnections is { Length: > 0 } max ? $", {max} connections" : string.Empty);
 
         var movieCategories = XtreamCatalogue.NameById(
             await GetListAsync<XtreamCategory>(client, credentials.Api("get_vod_categories"), headers, "get_vod_categories", ct));
@@ -64,7 +70,8 @@ public class XtreamClient(IHttpClientFactory httpClientFactory, ILogger<XtreamCl
         var movies = await GetListAsync<XtreamVodStream>(
             client, credentials.Api("get_vod_streams"), headers, "get_vod_streams", ct);
 
-        logger.LogInformation("{Source}: panel lists {Count} films", source.Name, movies.Count);
+        logger.LogInformation("{Source}: panel lists {Films} in {Categories}",
+            source.Name, Count(movies.Count, "film", "films"), Count(movieCategories.Count, "category", "categories"));
 
         foreach (var movie in movies)
         {
@@ -73,7 +80,11 @@ public class XtreamClient(IHttpClientFactory httpClientFactory, ILogger<XtreamCl
             yield return XtreamCatalogue.ForMovie(movie, Lookup(movieCategories, movie.CategoryId), credentials);
         }
 
-        if (!source.IncludeSeries) yield break;
+        if (!source.IncludeSeries)
+        {
+            logger.LogInformation("{Source}: series not requested, films only", source.Name);
+            yield break;
+        }
 
         var seriesCategories = XtreamCatalogue.NameById(
             await GetListAsync<XtreamCategory>(client, credentials.Api("get_series_categories"), headers, "get_series_categories", ct));
@@ -81,7 +92,10 @@ public class XtreamClient(IHttpClientFactory httpClientFactory, ILogger<XtreamCl
         var series = await GetListAsync<XtreamSeries>(
             client, credentials.Api("get_series"), headers, "get_series", ct);
 
-        logger.LogInformation("{Source}: panel lists {Count} series, fetching episodes", source.Name, series.Count);
+        logger.LogInformation(
+            "{Source}: panel lists {Series} in {Categories}; reading episode lists {Batch} at a time",
+            source.Name, Count(series.Count, "series", "series"),
+            Count(seriesCategories.Count, "category", "categories"), SeriesBatchSize);
 
         var done = 0;
 
@@ -158,4 +172,8 @@ public class XtreamClient(IHttpClientFactory httpClientFactory, ILogger<XtreamCl
 
     private static string? Lookup(Dictionary<string, string> categories, string? id) =>
         id is not null && categories.TryGetValue(id, out var name) ? name : null;
+
+    /// <summary>"1 category" rather than "1 categories"; these lines are meant to be read.</summary>
+    private static string Count(int number, string singular, string plural) =>
+        $"{number:N0} {(number == 1 ? singular : plural)}";
 }

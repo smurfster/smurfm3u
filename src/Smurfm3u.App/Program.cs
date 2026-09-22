@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Smurfm3u.App.Components;
 using Smurfm3u.App.Services;
+using Smurfm3u.Core.Diagnostics;
 using Smurfm3u.Core.Options;
 using Smurfm3u.Data;
 
@@ -20,6 +21,12 @@ builder.Services.AddDbContextFactory<AppDbContext>(options =>
 builder.Services.Configure<BootstrapOptions>(builder.Configuration.GetSection(BootstrapOptions.SectionName));
 
 builder.Services.AddSingleton(TimeProvider.System);
+
+// Registered before anything else so the log page has the startup lines too. The console
+// provider is left alone; this is a second copy, not a replacement.
+builder.Services.AddSingleton<LogRing>();
+builder.Services.AddSingleton<ILoggerProvider>(sp =>
+    new MemoryLoggerProvider(sp.GetRequiredService<LogRing>(), sp.GetRequiredService<TimeProvider>()));
 
 builder.Services.AddSingleton<SettingsService>();
 builder.Services.AddSingleton<ProxyProvider>();

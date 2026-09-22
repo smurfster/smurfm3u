@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
+using Smurfm3u.Core.Diagnostics;
 using Smurfm3u.Core.Entities;
 using Smurfm3u.Core.Parsing;
 using Smurfm3u.Core.Xtream;
@@ -27,6 +28,10 @@ public class M3uRefreshService(
 {
     /// <summary>Rows written per SaveChanges; keeps memory flat on playlists with millions of lines.</summary>
     private const int BatchSize = 1000;
+
+    /// <summary>How many entries between progress lines. Often enough to show movement on a
+    /// long playlist, rare enough that it does not become the log.</summary>
+    private const int ProgressInterval = 25000;
 
     /// <summary>Stops two refreshes of the same source from overlapping.</summary>
     private static readonly SemaphoreSlim RefreshGate = new(1, 1);
@@ -63,6 +68,9 @@ public class M3uRefreshService(
         var vod = 0;
         var added = 0;
 
+        logger.LogInformation("Refreshing {Source}: reading {Kind} {Location}",
+            source.Name, Describe(source.Kind), SafeUrl.Redact(source.Location));
+
         try
         {
             // ItemKey -> row id, so existing entries can be updated without loading them whole.
@@ -72,8 +80,12 @@ public class M3uRefreshService(
                 .Select(x => new { x.ItemKey, x.Id })
                 .ToDictionaryAsync(x => x.ItemKey, x => x.Id, ct);
 
+            logger.LogInformation("{Source}: reconciling against {Known} entries already known",
+                source.Name, existing.Count);
+
             db.ChangeTracker.AutoDetectChangesEnabled = false;
             var pending = 0;
+            var nextReport = ProgressInterval;
 
             await foreach (var candidate in ReadAsync(source, ct))
             {
@@ -112,6 +124,15 @@ public class M3uRefreshService(
                     db.ChangeTracker.Clear();
                     pending = 0;
                 }
+
+                // A large playlist runs for minutes, and silence for minutes reads as a hang.
+                if (total >= nextReport)
+                {
+                    logger.LogInformation("{Source}: {Total} entries read, {Vod} on demand, {Added} new so far",
+                        source.Name, total, vod, added);
+
+                    nextReport += ProgressInterval;
+                }
             }
 
             if (pending > 0)
@@ -143,7 +164,8 @@ public class M3uRefreshService(
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            logger.LogError(ex, "Refresh of source {SourceId} failed", sourceId);
+            logger.LogError(ex, "Refresh of {Source} failed after {Total} entries: {Reason}",
+                source.Name, total, ex.Message);
 
             db.ChangeTracker.Clear();
             db.ChangeTracker.AutoDetectChangesEnabled = true;
@@ -156,7 +178,7 @@ public class M3uRefreshService(
 
             notifications.Notify(Core.Options.NotificationEvent.RefreshFailed, failed.Name,
             [
-                new("Location", failed.Location),
+                new("Location", SafeUrl.Redact(failed.Location)),
                 new("Reason", ex.Message)
             ]);
 
@@ -223,6 +245,10 @@ public class M3uRefreshService(
             if (!File.Exists(source.Location))
                 throw new FileNotFoundException($"Playlist not found at {source.Location}.", source.Location);
 
+            var file = new FileInfo(source.Location);
+            logger.LogInformation("{Source}: opening {Path}, {Size}",
+                source.Name, source.Location, Core.Options.NotificationComposer.FormatBytes(file.Length));
+
             return File.OpenRead(source.Location);
         }
 
@@ -232,6 +258,15 @@ public class M3uRefreshService(
 
         var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();
+
+        // The size is the useful part: it says whether the provider sent a playlist or a
+        // one-line error page, long before the parse finds out.
+        logger.LogInformation("{Source}: provider answered HTTP {Status}, {Size}",
+            source.Name,
+            (int)response.StatusCode,
+            response.Content.Headers.ContentLength is { } length
+                ? Core.Options.NotificationComposer.FormatBytes(length)
+                : "length not declared");
 
         return await response.Content.ReadAsStreamAsync(ct);
     }
@@ -261,6 +296,14 @@ public class M3uRefreshService(
     /// </summary>
     public static string ItemKeyFor(string url) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(url)))[..32];
+
+    /// <summary>How a source kind reads in a log line.</summary>
+    private static string Describe(M3uSourceKind kind) => kind switch
+    {
+        M3uSourceKind.Local => "local file",
+        M3uSourceKind.Xtream => "Xtream panel",
+        _ => "remote playlist"
+    };
 
     private static string? Truncate(string? value, int max) =>
         value is null || value.Length <= max ? value : value[..max];

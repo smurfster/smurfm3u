@@ -11,6 +11,24 @@ what the UI reports is always what was built.
 
 ### Added
 
+- A **Logs** page, showing the last 1,000 lines as they are written, with a level filter, a
+  text filter, pause and clear. Kept in memory only and bounded; the container's log is
+  untouched and still the place to look for anything older.
+- **Playlists now say what they are doing.** Adding, editing, deleting, enabling and
+  disabling are logged with who did it, an edit naming the fields that changed. A refresh
+  logs what it is reading and from where, the size the provider answered with, progress every
+  25,000 entries, and the panel account for an Xtream source.
+
+### Fixed
+
+- A playlist being refreshed now **says so**. The status column kept showing the previous
+  run's outcome — "Failed", with its error underneath — next to a button already reading
+  "Refreshing...", because the two read different things: the button watched the page, the
+  status watched a row loaded before the run began. Both now come from one answer, which also
+  means a refresh the scheduler started shows as running rather than as whatever happened last.
+- Playlist locations are **redacted** wherever they are written. A provider's link carries the
+  password in its query string, so it was going into the log &mdash; now a page in the web UI
+  &mdash; and into the body of a refresh-failed email.
 - **Xtream panel playlists**, read through the panel's player API instead of as an m3u. The
   panel states the season, episode, episode title, container and runtime outright, so none of
   it has to be read back out of an entry name, and nothing live is requested in the first
