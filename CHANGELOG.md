@@ -27,6 +27,11 @@ what the UI reports is always what was built.
   `Retry-After`, the pause applies to every request in flight rather than just the one that
   was refused, and the episode walk drops to one series at a time for the rest of the run.
   `502`, `503` and `504` are treated the same way; a `401` or `404` still is not.
+- The episode walk **climbs back up** after easing off. A single refusal used to pin it to one
+  series at a time for the rest of the run, which on a panel of 30,000 series was the
+  difference between about an hour and about five. It now halves on a push-back and steps back
+  up as the panel answers cleanly, getting more reluctant each time it is refused so a panel
+  with a hard limit settles at that limit rather than oscillating around it.
 - An Xtream series whose episodes carry no runtime is **no longer skipped**. Panels are PHP,
   and PHP encodes an empty map as `[]` rather than `{}`, so an episode's `info` block arrives
   as an empty array whenever the panel knows no duration — which failed to parse and cost the

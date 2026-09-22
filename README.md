@@ -297,10 +297,12 @@ episode list is one request per series, and a panel may carry thousands. They ar
 few at a time, and progress goes to the log every 200 series. If that is more than you want
 on a six-hourly schedule, turn **Include series** off and the films still refresh in seconds.
 
-**If the panel pushes back, the refresh slows down rather than losing content.** A `429 Too
+**If the panel pushes back, the refresh eases off rather than losing content.** A `429 Too
 Many Requests` is not a missing series, it is a panel asking to be asked more slowly: the
 request waits and is tried again, honouring the panel's own `Retry-After` where it sends one,
-and the walk drops to one series at a time for the rest of that run. The same applies to a
+and the walk halves how many series it reads at once. It climbs back a step at a time once
+the panel is answering cleanly again, so one busy moment early in a large catalogue does not
+set the pace for the rest of it. The same applies to a
 `502`, `503` or `504`. Everything else &mdash; a `401`, a `404` &mdash; is the panel meaning
 it, and is not retried.
 

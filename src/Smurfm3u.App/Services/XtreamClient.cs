@@ -24,10 +24,10 @@ public class XtreamClient(IHttpClientFactory httpClientFactory, TimeProvider clo
     private DateTimeOffset resumeAt = DateTimeOffset.MinValue;
 
     /// <summary>
-    /// How many series are read at once, dropped to one the first time the panel pushes back.
+    /// How many series are read at once, moved up and down by how the panel is answering.
     /// Per client, and the client is created per refresh, so it starts optimistic each time.
     /// </summary>
-    private int batchSize = SeriesBatchSize;
+    private readonly XtreamPace pace = new(SeriesBatchSize);
 
     /// <summary>
     /// How many series are asked about at once. The episode list is one request per series and
@@ -201,6 +201,7 @@ public class XtreamClient(IHttpClientFactory httpClientFactory, TimeProvider clo
             }
 
             response.EnsureSuccessStatusCode();
+            RecordCleanAnswer();
 
             try
             {
@@ -239,31 +240,61 @@ public class XtreamClient(IHttpClientFactory httpClientFactory, TimeProvider clo
     }
 
     /// <summary>
-    /// Starts the pause, and drops the episode walk to one series at a time for the rest of
-    /// this run. A panel that refused four at once will refuse the next four as well, so
-    /// carrying on at the same rate turns the whole walk into waiting.
+    /// Starts the pause and eases off the episode walk. A panel that refused four at once will
+    /// refuse the next four as well, so carrying on at the same rate turns the walk into
+    /// waiting; it climbs back on its own once the panel is answering cleanly again.
     /// </summary>
     private void Pause(TimeSpan wait)
     {
+        bool eased;
+        int batch;
+
         lock (gate)
         {
-            var until = clock.GetUtcNow() + wait;
+            var now = clock.GetUtcNow();
+
+            // The requests in flight together are refused together, and that is one push-back
+            // rather than four. Counting each of them would have the pace treat a single busy
+            // moment as four, and grow four times as reluctant to speed up again afterwards.
+            var alreadyKnown = resumeAt > now;
+
+            var until = now + wait;
             if (until > resumeAt) resumeAt = until;
 
-            if (batchSize == 1) return;
-
-            batchSize = 1;
-            logger.LogInformation("Panel is rate limiting; reading series one at a time from here on");
+            eased = !alreadyKnown && pace.Refused();
+            batch = pace.Batch;
         }
+
+        if (eased)
+            logger.LogInformation("Panel is pushing back; easing off to {Batch} series at a time", batch);
+    }
+
+    /// <summary>
+    /// A clean answer, which is what earns the pace back. Counted for every call rather than
+    /// only the episode lists, because they all come out of the same allowance.
+    /// </summary>
+    private void RecordCleanAnswer()
+    {
+        bool faster;
+        int batch;
+
+        lock (gate)
+        {
+            faster = pace.Answered();
+            batch = pace.Batch;
+        }
+
+        if (faster)
+            logger.LogInformation("Panel is answering cleanly; going back up to {Batch} series at a time", batch);
     }
 
     private static string? Lookup(Dictionary<string, string> categories, string? id) =>
         id is not null && categories.TryGetValue(id, out var name) ? name : null;
 
-    /// <summary>The size to take next, under the lock because a refusal may be shrinking it.</summary>
+    /// <summary>The size to take next, under the lock because requests in flight are moving it.</summary>
     private int CurrentBatchSize
     {
-        get { lock (gate) return batchSize; }
+        get { lock (gate) return pace.Batch; }
     }
 
     /// <summary>"1 category" rather than "1 categories"; these lines are meant to be read.</summary>
