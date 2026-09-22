@@ -11,9 +11,23 @@ namespace Smurfm3u.App.Services;
 /// Reads a panel through its player API. Uses the same HTTP client as a playlist fetch, so a
 /// configured proxy carries these calls too.
 /// </summary>
-public class XtreamClient(IHttpClientFactory httpClientFactory, ILogger<XtreamClient> logger)
+public class XtreamClient(IHttpClientFactory httpClientFactory, TimeProvider clock, ILogger<XtreamClient> logger)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+
+    /// <summary>Retries of a refused request before it counts as a real failure.</summary>
+    private const int MaxAttempts = 4;
+
+    private readonly Lock gate = new();
+
+    /// <summary>When the panel may be asked again. Shared by every request in the walk.</summary>
+    private DateTimeOffset resumeAt = DateTimeOffset.MinValue;
+
+    /// <summary>
+    /// How many series are read at once, dropped to one the first time the panel pushes back.
+    /// Per client, and the client is created per refresh, so it starts optimistic each time.
+    /// </summary>
+    private int batchSize = SeriesBatchSize;
 
     /// <summary>
     /// How many series are asked about at once. The episode list is one request per series and
@@ -95,17 +109,23 @@ public class XtreamClient(IHttpClientFactory httpClientFactory, ILogger<XtreamCl
         logger.LogInformation(
             "{Source}: panel lists {Series} in {Categories}; reading episode lists {Batch} at a time",
             source.Name, Count(series.Count, "series", "series"),
-            Count(seriesCategories.Count, "category", "categories"), SeriesBatchSize);
+            Count(seriesCategories.Count, "category", "categories"), CurrentBatchSize);
 
+        var readable = series.Where(x => !string.IsNullOrWhiteSpace(x.SeriesId)).ToList();
         var done = 0;
 
-        foreach (var batch in series.Where(x => !string.IsNullOrWhiteSpace(x.SeriesId)).Chunk(SeriesBatchSize))
+        // Taken a slice at a time rather than pre-chunked, because the size shrinks if the
+        // panel starts refusing and a chunked sequence has already decided how it is split.
+        while (done < readable.Count)
         {
             ct.ThrowIfCancellationRequested();
 
+            var take = Math.Min(CurrentBatchSize, readable.Count - done);
+            var batch = readable.GetRange(done, take);
+
             var infos = await Task.WhenAll(batch.Select(x => SeriesInfoAsync(client, credentials, x, headers, ct)));
 
-            for (var i = 0; i < batch.Length; i++)
+            for (var i = 0; i < batch.Count; i++)
             {
                 if (infos[i] is not { } info) continue;
 
@@ -116,7 +136,7 @@ public class XtreamClient(IHttpClientFactory httpClientFactory, ILogger<XtreamCl
                 }
             }
 
-            done += batch.Length;
+            done += batch.Count;
 
             // A panel with thousands of series takes a while, and a silent hour reads as a hang.
             if (done % 200 == 0)
@@ -148,30 +168,103 @@ public class XtreamClient(IHttpClientFactory httpClientFactory, ILogger<XtreamCl
         HttpClient client, string url, string? headers, string action, CancellationToken ct) =>
         await GetAsync<List<T>>(client, url, headers, action, ct) ?? [];
 
-    private static async Task<T?> GetAsync<T>(
+    private async Task<T?> GetAsync<T>(
         HttpClient client, string url, string? headers, string action, CancellationToken ct)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
-        M3uRefreshService.ApplyHeaders(request, headers);
-
-        using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
-        response.EnsureSuccessStatusCode();
-
-        try
+        for (var attempt = 1; ; attempt++)
         {
-            return await response.Content.ReadFromJsonAsync<T>(Json, ct);
+            // Applies whether or not this request is the one that was refused: a panel that is
+            // counting requests wants all of them to stop, not just the unlucky one.
+            await WaitOutAnyPauseAsync(ct);
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            M3uRefreshService.ApplyHeaders(request, headers);
+
+            using var response = await client.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct);
+
+            if (!response.IsSuccessStatusCode
+                && XtreamBackoff.IsWorthRetrying((int)response.StatusCode)
+                && attempt <= MaxAttempts)
+            {
+                var wait = XtreamBackoff.For(
+                    attempt,
+                    response.Headers.TryGetValues("Retry-After", out var values) ? values.FirstOrDefault() : null,
+                    clock.GetUtcNow());
+
+                Pause(wait);
+
+                logger.LogWarning(
+                    "Panel answered {Status} to {Action}; waiting {Wait:0.#}s before attempt {Next} of {Max}",
+                    (int)response.StatusCode, action, wait.TotalSeconds, attempt + 1, MaxAttempts + 1);
+
+                continue;
+            }
+
+            response.EnsureSuccessStatusCode();
+
+            try
+            {
+                return await response.Content.ReadFromJsonAsync<T>(Json, ct);
+            }
+            catch (JsonException ex)
+            {
+                // Panels answer an unsupported action with an error object, or with HTML from a
+                // reverse proxy. Either way the action is worth naming; the raw body is not.
+                throw new InvalidOperationException(
+                    $"The panel's answer to {action} was not what the Xtream API describes.", ex);
+            }
         }
-        catch (JsonException ex)
+    }
+
+    /// <summary>
+    /// Holds every request until the pause a refusal set has elapsed. Without this the other
+    /// requests already in flight carry on into a panel that has just asked for quiet, and
+    /// each of them earns another refusal.
+    /// </summary>
+    private async Task WaitOutAnyPauseAsync(CancellationToken ct)
+    {
+        while (true)
         {
-            // Panels answer an unsupported action with an error object, or with HTML from a
-            // reverse proxy. Either way the action is worth naming; the raw body is not.
-            throw new InvalidOperationException(
-                $"The panel's answer to {action} was not what the Xtream API describes.", ex);
+            TimeSpan remaining;
+
+            lock (gate)
+            {
+                remaining = resumeAt - clock.GetUtcNow();
+            }
+
+            if (remaining <= TimeSpan.Zero) return;
+
+            await Task.Delay(remaining, clock, ct);
+        }
+    }
+
+    /// <summary>
+    /// Starts the pause, and drops the episode walk to one series at a time for the rest of
+    /// this run. A panel that refused four at once will refuse the next four as well, so
+    /// carrying on at the same rate turns the whole walk into waiting.
+    /// </summary>
+    private void Pause(TimeSpan wait)
+    {
+        lock (gate)
+        {
+            var until = clock.GetUtcNow() + wait;
+            if (until > resumeAt) resumeAt = until;
+
+            if (batchSize == 1) return;
+
+            batchSize = 1;
+            logger.LogInformation("Panel is rate limiting; reading series one at a time from here on");
         }
     }
 
     private static string? Lookup(Dictionary<string, string> categories, string? id) =>
         id is not null && categories.TryGetValue(id, out var name) ? name : null;
+
+    /// <summary>The size to take next, under the lock because a refusal may be shrinking it.</summary>
+    private int CurrentBatchSize
+    {
+        get { lock (gate) return batchSize; }
+    }
 
     /// <summary>"1 category" rather than "1 categories"; these lines are meant to be read.</summary>
     private static string Count(int number, string singular, string plural) =>

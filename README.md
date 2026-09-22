@@ -297,8 +297,15 @@ episode list is one request per series, and a panel may carry thousands. They ar
 few at a time, and progress goes to the log every 200 series. If that is more than you want
 on a six-hourly schedule, turn **Include series** off and the films still refresh in seconds.
 
-A series that fails to load is logged and skipped rather than failing the whole refresh; one
-bad entry out of thousands is not worth losing the rest.
+**If the panel pushes back, the refresh slows down rather than losing content.** A `429 Too
+Many Requests` is not a missing series, it is a panel asking to be asked more slowly: the
+request waits and is tried again, honouring the panel's own `Retry-After` where it sends one,
+and the walk drops to one series at a time for the rest of that run. The same applies to a
+`502`, `503` or `504`. Everything else &mdash; a `401`, a `404` &mdash; is the panel meaning
+it, and is not retried.
+
+A series that still fails after that is logged and skipped rather than failing the whole
+refresh; one bad entry out of thousands is not worth losing the rest.
 
 > The panel password is stored as written, in the playlist's row. That is what the panel has
 > to be presented with, so it cannot be hashed. Treat a database backup as containing a

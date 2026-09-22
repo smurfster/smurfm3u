@@ -21,6 +21,12 @@ what the UI reports is always what was built.
 
 ### Fixed
 
+- A **rate-limited panel no longer costs content**. A `429` was treated as a failed series
+  and skipped, so a panel that only wanted to be asked more slowly lost part of its catalogue
+  on every refresh. Refused requests now wait and try again, honouring the panel's own
+  `Retry-After`, the pause applies to every request in flight rather than just the one that
+  was refused, and the episode walk drops to one series at a time for the rest of the run.
+  `502`, `503` and `504` are treated the same way; a `401` or `404` still is not.
 - An Xtream series whose episodes carry no runtime is **no longer skipped**. Panels are PHP,
   and PHP encodes an empty map as `[]` rather than `{}`, so an episode's `info` block arrives
   as an empty array whenever the panel knows no duration — which failed to parse and cost the
