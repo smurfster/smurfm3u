@@ -9,8 +9,17 @@ what the UI reports is always what was built.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.1.0] - 2026-09-22
+
 ### Added
 
+- **Xtream panel playlists**, read through the panel's player API instead of as an m3u. The
+  panel states the season, episode, episode title, container and runtime outright, so none of
+  it has to be read back out of an entry name, and nothing live is requested in the first
+  place. **Test connection** checks the login before saving, and a pasted `get.php` link is
+  accepted whole: the credentials are lifted out of it and only the address is kept.
 - A **progress bar** on a playlist while it refreshes, with a count and a rough time
   remaining. A panel reports its films and then its series, one series being one request and
   so the unit the waiting is made of; a playlist reports bytes against the length the provider
@@ -23,6 +32,9 @@ what the UI reports is always what was built.
   disabling are logged with who did it, an edit naming the fields that changed. A refresh
   logs what it is reading and from where, the size the provider answered with, progress every
   25,000 entries, and the panel account for an Xtream source.
+- A **light theme** alongside the dark one, with a toggle in the top bar. It follows the
+  system preference until a choice is made here, and then remembers that choice per browser.
+- **Icons** on the navigation links, drawn inline so there is nothing to fetch.
 
 ### Fixed
 
@@ -49,14 +61,6 @@ what the UI reports is always what was built.
 - Playlist locations are **redacted** wherever they are written. A provider's link carries the
   password in its query string, so it was going into the log &mdash; now a page in the web UI
   &mdash; and into the body of a refresh-failed email.
-- **Xtream panel playlists**, read through the panel's player API instead of as an m3u. The
-  panel states the season, episode, episode title, container and runtime outright, so none of
-  it has to be read back out of an entry name, and nothing live is requested in the first
-  place. **Test connection** checks the login before saving, and a pasted `get.php` link is
-  accepted whole: the credentials are lifted out of it and only the address is kept.
-- A **light theme** alongside the dark one, with a toggle in the top bar. It follows the
-  system preference until a choice is made here, and then remembers that choice per browser.
-- **Icons** on the navigation links, drawn inline so there is nothing to fetch.
 
 ### Changed
 
@@ -104,5 +108,6 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/smurfster/smurfm3u/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/smurfster/smurfm3u/releases/tag/v1.0.0
