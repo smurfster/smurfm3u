@@ -24,9 +24,9 @@ what the UI reports is always what was built.
 - A **rate-limited panel no longer costs content**. A `429` was treated as a failed series
   and skipped, so a panel that only wanted to be asked more slowly lost part of its catalogue
   on every refresh. Refused requests now wait and try again, honouring the panel's own
-  `Retry-After`, the pause applies to every request in flight rather than just the one that
-  was refused, and the episode walk drops to one series at a time for the rest of the run.
-  `502`, `503` and `504` are treated the same way; a `401` or `404` still is not.
+  `Retry-After`, and the pause applies to every request in flight rather than just the one
+  that was refused. `502`, `503` and `504` are treated the same way; a `401` or `404` still
+  is not.
 - The episode walk **climbs back up** after easing off. A single refusal used to pin it to one
   series at a time for the rest of the run, which on a panel of 30,000 series was the
   difference between about an hour and about five. It now halves on a push-back and steps back
