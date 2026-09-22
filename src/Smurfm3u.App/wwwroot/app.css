@@ -777,6 +777,13 @@ input[type=checkbox] {
     makes its min-content width about one character. Left to size itself the table hands the
     space to the three narrow columns and wraps the message two words at a time.
 */
+.refresh-stage {
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    text-align: right;
+    white-space: nowrap;
+}
+
 .log-table {
     table-layout: fixed;
 }

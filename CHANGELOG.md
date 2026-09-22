@@ -11,6 +11,11 @@ what the UI reports is always what was built.
 
 ### Added
 
+- A **progress bar** on a playlist while it refreshes, with a count and a rough time
+  remaining. A panel reports its films and then its series, one series being one request and
+  so the unit the waiting is made of; a playlist reports bytes against the length the provider
+  declared. Where nothing declares a length there is no bar, because there is nothing honest
+  to divide by, and it shows a live count instead.
 - A **Logs** page, showing the last 1,000 lines as they are written, with a level filter, a
   text filter, pause and clear. Kept in memory only and bounded; the container's log is
   untouched and still the place to look for anything older.

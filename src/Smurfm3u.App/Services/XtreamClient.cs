@@ -11,12 +11,19 @@ namespace Smurfm3u.App.Services;
 /// Reads a panel through its player API. Uses the same HTTP client as a playlist fetch, so a
 /// configured proxy carries these calls too.
 /// </summary>
-public class XtreamClient(IHttpClientFactory httpClientFactory, TimeProvider clock, ILogger<XtreamClient> logger)
+public class XtreamClient(
+    IHttpClientFactory httpClientFactory,
+    RefreshProgress progress,
+    TimeProvider clock,
+    ILogger<XtreamClient> logger)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
     /// <summary>Series between progress lines during the episode walk.</summary>
     private const int ProgressEvery = 200;
+
+    /// <summary>Films between updates of the live progress the page watches.</summary>
+    private const int ProgressSamples = 500;
 
     /// <summary>Retries of a refused request before it counts as a real failure.</summary>
     private const int MaxAttempts = 4;
@@ -90,8 +97,13 @@ public class XtreamClient(IHttpClientFactory httpClientFactory, TimeProvider clo
         logger.LogInformation("{Source}: panel lists {Films} in {Categories}",
             source.Name, Count(movies.Count, "film", "films"), Count(movieCategories.Count, "category", "categories"));
 
+        progress.Begin(source.Id, "films", movies.Count);
+        var films = 0;
+
         foreach (var movie in movies)
         {
+            if (++films % ProgressSamples == 0) progress.Report(source.Id, films);
+
             if (string.IsNullOrWhiteSpace(movie.StreamId) || string.IsNullOrWhiteSpace(movie.Name)) continue;
 
             yield return XtreamCatalogue.ForMovie(movie, Lookup(movieCategories, movie.CategoryId), credentials);
@@ -118,6 +130,10 @@ public class XtreamClient(IHttpClientFactory httpClientFactory, TimeProvider clo
         var done = 0;
         var nextReport = ProgressEvery;
 
+        // One series is one request, so it is the unit the waiting is actually made of.
+        // Counting episodes instead would jump by fifty for one series and by two for the next.
+        progress.Begin(source.Id, "series", readable.Count);
+
         // Taken a slice at a time rather than pre-chunked, because the size shrinks if the
         // panel starts refusing and a chunked sequence has already decided how it is split.
         while (done < readable.Count)
@@ -141,6 +157,7 @@ public class XtreamClient(IHttpClientFactory httpClientFactory, TimeProvider clo
             }
 
             done += batch.Count;
+            progress.Report(source.Id, done);
 
             // A panel with thousands of series takes a while, and a silent hour reads as a hang.
             // Counted to the next milestone rather than checked for a multiple: the batch size

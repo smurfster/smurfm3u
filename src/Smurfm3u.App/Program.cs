@@ -31,6 +31,7 @@ builder.Services.AddSingleton<ILoggerProvider>(sp =>
 builder.Services.AddSingleton<SettingsService>();
 builder.Services.AddSingleton<ProxyProvider>();
 builder.Services.AddSingleton<DownloadManager>();
+builder.Services.AddSingleton<RefreshProgress>();
 builder.Services.AddSingleton<SpeedLimitService>();
 builder.Services.AddSingleton<SmtpNotifier>();
 builder.Services.AddSingleton<NotificationService>();

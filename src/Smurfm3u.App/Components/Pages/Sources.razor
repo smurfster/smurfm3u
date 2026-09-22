@@ -3,6 +3,7 @@
 @using Microsoft.EntityFrameworkCore
 @using Smurfm3u.Core.Models
 @using Smurfm3u.Core.Diagnostics
+@using Smurfm3u.Core.Options
 @using Smurfm3u.Core.Xtream
 @using Smurfm3u.Data
 @attribute [Authorize]
@@ -13,6 +14,8 @@
 @inject IServiceScopeFactory ScopeFactory
 @inject AuthenticationStateProvider AuthState
 @inject ILogger<Sources> Log
+@inject RefreshProgress Progress
+@implements IDisposable
 
 <PageTitle>Playlists - Smurfm3u</PageTitle>
 
@@ -218,7 +221,33 @@ else
                             <div class="muted" style="font-size:.8rem;max-width:280px">@source.LastRefreshError</div>
                         }
                     </td>
-                    <td class="numeric">@source.VodEntries.ToString("N0") / @source.TotalEntries.ToString("N0")</td>
+                    <td class="numeric">
+                        @if (Progress.For(source.Id) is { } stage)
+                        {
+                            @* While it is running, what it is doing now beats what it found last time. *@
+                            <div class="refresh-stage">@stage.Phase</div>
+
+                            @if (stage.Percent is { } percent)
+                            {
+                                <div class="progress">
+                                    <div class="progress-bar" style="width:@(percent)%"></div>
+                                    <div class="progress-text">@percent%</div>
+                                </div>
+                                <div class="refresh-stage">
+                                    @stage.Done.ToString("N0") / @stage.Total!.Value.ToString("N0")@Eta(stage)
+                                </div>
+                            }
+                            else
+                            {
+                                @* No declared length, so nothing honest to divide by. *@
+                                <div class="refresh-stage">@Described(stage.Done) so far</div>
+                            }
+                        }
+                        else
+                        {
+                            <span>@source.VodEntries.ToString("N0") / @source.TotalEntries.ToString("N0")</span>
+                        }
+                    </td>
                     <td>
                         <div class="actions">
                             <button class="small" disabled="@IsRefreshing(source)"
@@ -334,6 +363,47 @@ else
     /// <summary>Who is making the changes, so the log says who as well as what.</summary>
     private string user = "someone";
 
+    /// <summary>
+    /// Drives the progress bars. Only ticks while something is actually refreshing, so an
+    /// idle page costs nothing; a refresh the scheduler started moves it just the same.
+    /// </summary>
+    private PeriodicTimer? ticker;
+
+    /// <summary>Bytes when a playlist is being read, entries when a panel is.</summary>
+    private static string Described(long done) =>
+        done > 1_000_000 ? NotificationComposer.FormatBytes(done) : done.ToString("N0");
+
+    /// <summary>" · about 4m left", or nothing until the rate means something.</summary>
+    private string Eta(RefreshStage stage)
+    {
+        if (stage.Remaining(DateTimeOffset.UtcNow) is not { } left) return string.Empty;
+
+        return left.TotalMinutes >= 1
+            ? $" · about {(int)left.TotalMinutes}m left"
+            : $" · about {(int)left.TotalSeconds}s left";
+    }
+
+    private async Task TickAsync()
+    {
+        ticker = new PeriodicTimer(TimeSpan.FromSeconds(2));
+
+        try
+        {
+            while (await ticker.WaitForNextTickAsync())
+            {
+                if (sources.All(x => Progress.For(x.Id) is null) && refreshing.Count == 0) continue;
+
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The page has gone.
+        }
+    }
+
+    public void Dispose() => ticker?.Dispose();
+
     private static string KindLabel(M3uSourceKind kind) => kind switch
     {
         M3uSourceKind.Local => "local file",
@@ -349,6 +419,8 @@ else
         // The picker opens at whichever folder is configured for playlists, not a guess.
         playlistFallback = (await SettingsStore.GetAsync()).PlaylistPath;
         await LoadAsync();
+
+        _ = TickAsync();
     }
 
     private async Task LoadAsync()

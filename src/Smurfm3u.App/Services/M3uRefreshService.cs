@@ -22,6 +22,7 @@ public class M3uRefreshService(
     IDbContextFactory<AppDbContext> dbFactory,
     IHttpClientFactory httpClientFactory,
     XtreamClient xtream,
+    RefreshProgress progress,
     TimeProvider clock,
     NotificationService notifications,
     ILogger<M3uRefreshService> logger)
@@ -32,6 +33,9 @@ public class M3uRefreshService(
     /// <summary>How many entries between progress lines. Often enough to show movement on a
     /// long playlist, rare enough that it does not become the log.</summary>
     private const int ProgressInterval = 25000;
+
+    /// <summary>Entries between updates of the live progress the page watches.</summary>
+    private const int ProgressSamples = 500;
 
     /// <summary>Stops two refreshes of the same source from overlapping.</summary>
     private static readonly SemaphoreSlim RefreshGate = new(1, 1);
@@ -184,6 +188,11 @@ public class M3uRefreshService(
 
             throw;
         }
+        finally
+        {
+            // However it ended. Left behind, the page would show a bar that never moves again.
+            progress.Finish(sourceId);
+        }
     }
 
     private static M3uItem Populate(
@@ -231,14 +240,31 @@ public class M3uRefreshService(
             yield break;
         }
 
-        await using var stream = await OpenAsync(source, ct);
+        var (raw, declared) = await OpenAsync(source, ct);
+
+        // Counted through a wrapper because a playlist is parsed as it arrives: bytes consumed
+        // is the only honest measure of how far in it is, and the only one with a denominator.
+        await using var stream = new CountingStream(raw);
         using var reader = new StreamReader(stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: true);
 
+        progress.Begin(source.Id, "playlist", declared);
+
+        var seen = 0;
+
         await foreach (var entry in M3uParser.ParseAsync(reader, ct))
+        {
+            // Often enough to move smoothly, rarely enough to stay off the parse's back.
+            if (++seen % ProgressSamples == 0) progress.Report(source.Id, stream.BytesRead);
+
             yield return new IngestCandidate(entry, VodClassifier.Classify(entry));
+        }
     }
 
-    private async Task<Stream> OpenAsync(M3uSource source, CancellationToken ct)
+    /// <summary>
+    /// The playlist, and how many bytes of it to expect. The length is null when the provider
+    /// streams without declaring one, which is the case with no denominator to show.
+    /// </summary>
+    private async Task<(Stream Stream, long? Length)> OpenAsync(M3uSource source, CancellationToken ct)
     {
         if (source.Kind == M3uSourceKind.Local)
         {
@@ -249,7 +275,7 @@ public class M3uRefreshService(
             logger.LogInformation("{Source}: opening {Path}, {Size}",
                 source.Name, source.Location, Core.Options.NotificationComposer.FormatBytes(file.Length));
 
-            return File.OpenRead(source.Location);
+            return (File.OpenRead(source.Location), file.Length);
         }
 
         var client = httpClientFactory.CreateClient("playlist");
@@ -268,7 +294,7 @@ public class M3uRefreshService(
                 ? Core.Options.NotificationComposer.FormatBytes(length)
                 : "length not declared");
 
-        return await response.Content.ReadAsStreamAsync(ct);
+        return (await response.Content.ReadAsStreamAsync(ct), response.Content.Headers.ContentLength);
     }
 
     /// <summary>Applies the source's custom headers, written one "Name: value" per line.</summary>
