@@ -516,3 +516,23 @@ dotnet ef migrations add <Name> -p src/Smurfm3u.Data -s src/Smurfm3u.Data
 ```
 
 They are applied automatically at startup.
+
+### Versioning
+
+Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html), and changes are
+recorded in [CHANGELOG.md](CHANGELOG.md).
+
+The number lives in `Directory.Build.props` and nowhere else. The app reads it back from its
+own assembly and shows it under the sign-out button, so what the UI reports is always what
+was built &mdash; hover it to see the commit. To cut a release:
+
+```bash
+# 1. Bump <Version> in Directory.Build.props
+# 2. Move the Unreleased entries in CHANGELOG.md under the new heading
+git commit -am "Release 1.1.0"
+git tag -a v1.1.0 -m "1.1.0"
+git push --follow-tags
+```
+
+The SABnzbd endpoint separately reports a *SABnzbd* version (`4.3.3`) to Sonarr and Radarr.
+That is the protocol version they check against, not ours, and it does not move with releases.

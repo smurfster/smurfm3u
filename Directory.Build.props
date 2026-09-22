@@ -1,0 +1,13 @@
+<Project>
+
+  <!--
+    The version lives here and nowhere else, so the assemblies, the UI and the changelog
+    cannot drift apart. Bumping a release means editing the line below and adding the
+    matching section to CHANGELOG.md.
+  -->
+  <PropertyGroup>
+    <Version>1.0.0</Version>
+    <Product>Smurfm3u</Product>
+  </PropertyGroup>
+
+</Project>
