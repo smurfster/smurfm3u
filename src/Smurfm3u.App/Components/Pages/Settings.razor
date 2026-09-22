@@ -12,6 +12,7 @@
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthState
 @inject NotificationService Notifications
+@inject ProxyTester ProxyTester
 
 <PageTitle>Settings - Smurfm3u</PageTitle>
 
@@ -354,6 +355,73 @@ else
     </div>
 
     <div class="card">
+        <h2>Proxy</h2>
+
+        <div class="field inline-field">
+            <input type="checkbox" id="proxyEnabled" @bind="settings.Proxy.Enabled" />
+            <label for="proxyEnabled">Fetch playlists and download through a proxy</label>
+        </div>
+        <div class="hint">
+            Applies to playlist refreshes and to downloads. Notifications go out over SMTP and
+            are not affected, and neither is anything Prowlarr, Sonarr or Radarr sends in.
+        </div>
+
+        <div class="field-grid">
+            <div class="field">
+                <label>Type</label>
+                <select @bind="settings.Proxy.Kind">
+                    @foreach (var kind in ProxyKinds)
+                    {
+                        <option value="@kind">@ProxySettings.Describe(kind)</option>
+                    }
+                </select>
+                <div class="hint">
+                    SOCKS5 is the usual choice for a VPN or SSH tunnel. SOCKS4 has no
+                    authentication and resolves names locally; SOCKS4a resolves them at the proxy.
+                </div>
+            </div>
+            <div class="field">
+                <label>Host</label>
+                <input @bind="settings.Proxy.Host" placeholder="10.0.0.5" />
+                <div class="hint">Name or IP. A whole URL pasted here is picked apart.</div>
+            </div>
+            <div class="field">
+                <label>Port</label>
+                <input type="number" @bind="settings.Proxy.Port" />
+                <div class="hint">1080 is the usual SOCKS port, 8080 the usual HTTP one.</div>
+            </div>
+            <div class="field">
+                <label>Username</label>
+                <input @bind="settings.Proxy.Username" />
+                <div class="hint">Leave blank for a proxy that needs no login.</div>
+            </div>
+            <div class="field">
+                <label>Password</label>
+                <input type="password" @bind="settings.Proxy.Password" />
+            </div>
+            <div class="field">
+                <label>Bypass</label>
+                <input @bind="settings.Proxy.BypassHosts" placeholder="192.168.*, .local" />
+                <div class="hint">
+                    Hosts that go direct instead, separated by commas. <span class="mono">*</span>
+                    matches anything, and a pattern starting with <span class="mono">.</span> covers
+                    a domain and everything under it.
+                </div>
+            </div>
+        </div>
+
+        <div class="actions">
+            <button @onclick="TestProxyAsync" disabled="@testingProxy">
+                @(testingProxy ? "Testing..." : "Test proxy")
+            </button>
+            <span>
+                Fetches your first enabled remote playlist through it, using what is on screen;
+                no need to save first.
+            </span>
+        </div>
+    </div>
+
+    <div class="card">
         <h2>History retention</h2>
 
         <div class="field-grid">
@@ -444,6 +512,8 @@ else
         settings.ManualSpeedLimitKibps = Math.Max(0, settings.ManualSpeedLimitKibps);
         settings.SearchHistoryRetentionDays = Math.Max(0, settings.SearchHistoryRetentionDays);
         settings.DownloadHistoryRetentionDays = Math.Max(0, settings.DownloadHistoryRetentionDays);
+        settings.Proxy.Host = (settings.Proxy.Host ?? string.Empty).Trim();
+        settings.Proxy.Port = Math.Clamp(settings.Proxy.Port, 1, 65535);
 
         // A half-filled row would silently do nothing, so it is dropped rather than stored.
         settings.PathMappings.RemoveAll(m =>
@@ -492,8 +562,10 @@ else
     }
 
     private static readonly NotificationEvent[] NotificationKinds = Enum.GetValues<NotificationEvent>();
+    private static readonly ProxyKind[] ProxyKinds = Enum.GetValues<ProxyKind>();
 
     private bool sendingTest;
+    private bool testingProxy;
 
     private void ToggleEvent(NotificationEvent kind, ChangeEventArgs e)
     {
@@ -527,6 +599,22 @@ else
         finally
         {
             sendingTest = false;
+        }
+    }
+
+    private async Task TestProxyAsync()
+    {
+        if (settings is null) return;
+
+        testingProxy = true;
+        try
+        {
+            var result = await ProxyTester.TestAsync(settings.Proxy);
+            SetMessage(result.Message, isError: !result.Ok);
+        }
+        finally
+        {
+            testingProxy = false;
         }
     }
 
@@ -624,6 +712,17 @@ else
         FallbackSizeMib = source.FallbackSizeMib,
         MaxDownloadAttempts = source.MaxDownloadAttempts,
         DeleteFailedFiles = source.DeleteFailedFiles,
+        // Deep-copied for the same reason as the notification settings below.
+        Proxy = new ProxySettings
+        {
+            Enabled = source.Proxy.Enabled,
+            Kind = source.Proxy.Kind,
+            Host = source.Proxy.Host,
+            Port = source.Proxy.Port,
+            Username = source.Proxy.Username,
+            Password = source.Proxy.Password,
+            BypassHosts = source.Proxy.BypassHosts
+        },
         // Deep-copied for the same reason as the mappings: an abandoned edit must not
         // reach the cached settings, and this subtree holds credentials.
         Notifications = new NotificationSettings

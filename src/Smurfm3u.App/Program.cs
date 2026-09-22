@@ -22,6 +22,7 @@ builder.Services.Configure<BootstrapOptions>(builder.Configuration.GetSection(Bo
 builder.Services.AddSingleton(TimeProvider.System);
 
 builder.Services.AddSingleton<SettingsService>();
+builder.Services.AddSingleton<ProxyProvider>();
 builder.Services.AddSingleton<DownloadManager>();
 builder.Services.AddSingleton<SpeedLimitService>();
 builder.Services.AddSingleton<SmtpNotifier>();
@@ -36,6 +37,7 @@ builder.Services.AddScoped<FileDownloader>();
 builder.Services.AddScoped<DatabaseInitializer>();
 builder.Services.AddScoped<StartupRecoveryService>();
 builder.Services.AddScoped<SearchHistoryService>();
+builder.Services.AddScoped<ProxyTester>();
 
 builder.Services.AddHostedService<DownloadWorker>();
 builder.Services.AddHostedService<RefreshScheduler>();
@@ -46,13 +48,13 @@ builder.Services.AddHttpClient("playlist", client =>
 {
     client.Timeout = TimeSpan.FromMinutes(10);
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Smurfm3u/1.0");
-});
+}).UseConfiguredProxy();
 
 builder.Services.AddHttpClient("download", client =>
 {
     client.Timeout = Timeout.InfiniteTimeSpan;
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Smurfm3u/1.0");
-});
+}).UseConfiguredProxy();
 
 // Without this the keys live inside the container, so every rebuild or recreate invalidates
 // every auth cookie and antiforgery token and signs everyone out.
@@ -134,6 +136,9 @@ await using (var scope = app.Services.CreateAsyncScope())
 {
     var initializer = scope.ServiceProvider.GetRequiredService<DatabaseInitializer>();
     await initializer.InitializeAsync();
+
+    // Before the first request, so nothing goes out direct while the settings are still unread.
+    await ProxyProvider.PrimeAsync(scope.ServiceProvider);
 
     // Anything the previous process left half-done is put right before the first request.
     var recovery = scope.ServiceProvider.GetRequiredService<StartupRecoveryService>();

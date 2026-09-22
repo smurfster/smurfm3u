@@ -24,6 +24,9 @@ public class ServiceSettings
     /// <summary>Where notifications go, and which events send one.</summary>
     public NotificationSettings Notifications { get; set; } = new();
 
+    /// <summary>Proxy for playlist fetches and downloads. Off by default, which goes direct.</summary>
+    public ProxySettings Proxy { get; set; } = new();
+
     /// <summary>
     /// Rewrites the paths reported to Sonarr and Radarr when they see the same files
     /// somewhere else. Empty means they see what we see, which needs no mapping.
