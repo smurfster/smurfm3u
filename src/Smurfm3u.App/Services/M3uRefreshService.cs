@@ -22,6 +22,7 @@ public class M3uRefreshService(
     IDbContextFactory<AppDbContext> dbFactory,
     IHttpClientFactory httpClientFactory,
     XtreamClient xtream,
+    SeriesBackfill backfill,
     RefreshProgress progress,
     TimeProvider clock,
     NotificationService notifications,
@@ -150,6 +151,13 @@ public class M3uRefreshService(
             // fetched here at all; a search asks for the ones it needs.
             var series = await SyncSeriesAsync(db, source, runStamp, ct);
 
+            // Except for the ones nobody has asked about in a week. Everything else here waits
+            // to be asked; this is the part that does not, so a series can go stale but only
+            // for so long.
+            var rechecked = source.Kind == M3uSourceKind.Xtream
+                ? await backfill.RecheckStaleAsync(sourceId, ct)
+                : 0;
+
             // Anything this run did not touch has left the playlist. Rows are retired rather than
             // deleted so finished downloads still have something to point back at.
             //
@@ -172,8 +180,8 @@ public class M3uRefreshService(
 
             var elapsed = Stopwatch.GetElapsedTime(started);
             logger.LogInformation(
-                "Refreshed {Source}: {Vod} on-demand of {Total} entries, {Added} new, {Series} series listed, {Deactivated} retired, in {Elapsed}",
-                fresh.Name, vod, total, added, series, deactivated, elapsed);
+                "Refreshed {Source}: {Vod} on-demand of {Total} entries, {Added} new, {Series} series listed, {Rechecked} re-read, {Deactivated} retired, in {Elapsed}",
+                fresh.Name, vod, total, added, series, rechecked, deactivated, elapsed);
 
             return new RefreshResult(sourceId, total, vod, added, deactivated, elapsed);
         }

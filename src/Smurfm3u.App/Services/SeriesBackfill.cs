@@ -27,6 +27,56 @@ public class SeriesBackfill(
     private const int MostPerSearch = 3;
 
     /// <summary>
+    /// How long episodes on hand are believed without being checked again. A search re-fetches
+    /// when the panel's own stamp moves, but a panel that neglects that stamp would otherwise
+    /// keep a withdrawn episode on offer for as long as nobody noticed.
+    /// </summary>
+    private static readonly TimeSpan Believable = TimeSpan.FromDays(7);
+
+    /// <summary>
+    /// How many stale series one refresh re-checks. A ceiling, so a long-neglected catalogue
+    /// works through itself over several runs instead of turning one into the old full walk.
+    /// </summary>
+    private const int MostPerRefresh = 200;
+
+    /// <summary>
+    /// Re-reads the episodes of series that were last fetched too long ago, oldest first.
+    /// <para>
+    /// Everything else here is driven by being asked. This is the part that is not: without it
+    /// a series nobody searches for is never looked at again, and a panel that does not update
+    /// its own last-changed stamp could hide a withdrawal indefinitely.
+    /// </para>
+    /// </summary>
+    /// <returns>How many series were re-read.</returns>
+    public async Task<int> RecheckStaleAsync(int sourceId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+
+        var before = clock.GetUtcNow() - Believable;
+
+        var stale = await db.Series
+            .AsNoTracking()
+            .Where(x => x.SourceId == sourceId && x.IsActive
+                        && x.EpisodesFetchedAt != null && x.EpisodesFetchedAt < before)
+            .OrderBy(x => x.EpisodesFetchedAt)
+            .Take(MostPerRefresh)
+            .ToListAsync(ct);
+
+        if (stale.Count == 0) return 0;
+
+        logger.LogInformation("Re-reading {Count} series not checked since {Before:yyyy-MM-dd}",
+            stale.Count, before);
+
+        foreach (var series in stale)
+        {
+            ct.ThrowIfCancellationRequested();
+            await FetchAsync(db, series, ct);
+        }
+
+        return stale.Count;
+    }
+
+    /// <summary>
     /// Makes sure the episodes of any series matching these words are on hand, fetching them
     /// if they are missing or if the panel has changed the series since they were fetched.
     /// </summary>

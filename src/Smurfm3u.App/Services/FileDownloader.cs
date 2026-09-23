@@ -10,6 +10,12 @@ using Smurfm3u.Data;
 namespace Smurfm3u.App.Services;
 
 /// <summary>
+/// The provider answered that the file is not there. Distinct from the transient failures
+/// because retrying cannot help: nothing about a 404 gets better by asking again.
+/// </summary>
+public sealed class ContentGoneException(string message) : Exception(message);
+
+/// <summary>
 /// Streams one VOD entry to disk. Writes into the incomplete directory and only moves the
 /// finished file into the complete directory, so the *arr apps never import a partial file.
 /// </summary>
@@ -148,6 +154,27 @@ public class FileDownloader(
         {
             logger.LogInformation("{Name}: server does not support resume, restarting", download.Name);
             resumeFrom = 0;
+        }
+
+        // A provider that answers "gone" is not having a bad moment, it has taken the file
+        // down. That is the clearest evidence there is that the entry behind it is stale, and
+        // the only moment staleness actually costs anything, so the entry is retired here and
+        // the download stops rather than spending its retries proving the same point.
+        if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Gone)
+        {
+            if (download.M3uItemId is { } itemId)
+            {
+                await db.Items
+                    .Where(x => x.Id == itemId)
+                    .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsActive, false), CancellationToken.None);
+
+                logger.LogWarning(
+                    "{Name}: the provider no longer has this file ({Status}); the entry has been retired",
+                    download.Name, (int)response.StatusCode);
+            }
+
+            throw new ContentGoneException(
+                $"The provider no longer has this file ({(int)response.StatusCode} {response.StatusCode}).");
         }
 
         response.EnsureSuccessStatusCode();
@@ -295,7 +322,9 @@ public class FileDownloader(
         // download does not burn one of its retries. Only a real failure costs an attempt.
         download.AttemptCount++;
 
-        var giveUp = download.AttemptCount >= settings.MaxDownloadAttempts;
+        // A file the provider says is gone will still be gone on the next attempt, so the
+        // retries are spent rather than used. It fails now, with the reason.
+        var giveUp = ex is ContentGoneException || download.AttemptCount >= settings.MaxDownloadAttempts;
 
         logger.Log(giveUp ? LogLevel.Error : LogLevel.Warning, ex,
             "Download {Name} failed on attempt {Attempt} of {Max}",
