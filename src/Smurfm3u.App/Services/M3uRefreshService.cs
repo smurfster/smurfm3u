@@ -22,6 +22,7 @@ public class M3uRefreshService(
     IDbContextFactory<AppDbContext> dbFactory,
     IHttpClientFactory httpClientFactory,
     XtreamClient xtream,
+    SeriesBackfill backfill,
     RefreshProgress progress,
     TimeProvider clock,
     NotificationService notifications,
@@ -36,16 +37,6 @@ public class M3uRefreshService(
 
     /// <summary>Entries between updates of the live progress the page watches.</summary>
     private const int ProgressSamples = 500;
-
-    /// <summary>
-    /// How long a panel's own last-changed stamps are trusted before one run reads everything
-    /// regardless. Short enough that a panel which neglects them cannot hide new episodes for
-    /// long, long enough that the expensive walk stays rare.
-    /// </summary>
-    private static readonly TimeSpan FullWalkEvery = TimeSpan.FromDays(7);
-
-    /// <summary>Series ids are chunked into IN clauses rather than sent as one enormous list.</summary>
-    private const int KeepAliveChunk = 2000;
 
     /// <summary>Stops two refreshes of the same source from overlapping.</summary>
     private static readonly SemaphoreSlim RefreshGate = new(1, 1);
@@ -81,9 +72,6 @@ public class M3uRefreshService(
         var total = 0;
         var vod = 0;
         var added = 0;
-
-        // Decided before anything is read, because the answer is what makes the read full.
-        var wasFullWalk = IsFullWalkDue(source);
 
         logger.LogInformation("Refreshing {Source}: reading {Kind} {Location}",
             source.Name, Describe(source.Kind), SafeUrl.Redact(source.Location));
@@ -159,37 +147,43 @@ public class M3uRefreshService(
             db.ChangeTracker.Clear();
             db.ChangeTracker.AutoDetectChangesEnabled = true;
 
-            // A series left alone because the panel says it has not changed was never read, so
-            // none of its episodes were touched above. They are still there; marking them seen
-            // is what stops the reconcile below retiring an entire series for not being asked
-            // about. This has to happen before the retire, not after.
-            var kept = await KeepUnchangedAsync(db, sourceId, runStamp, ct);
+            // The series list, which is one request whatever its size. Their episodes are not
+            // fetched here at all; a search asks for the ones it needs.
+            var series = await SyncSeriesAsync(db, source, runStamp, ct);
+
+            // Except for the ones nobody has asked about in a week. Everything else here waits
+            // to be asked; this is the part that does not, so a series can go stale but only
+            // for so long.
+            var rechecked = source.Kind == M3uSourceKind.Xtream
+                ? await backfill.RecheckStaleAsync(sourceId, ct)
+                : 0;
 
             // Anything this run did not touch has left the playlist. Rows are retired rather than
             // deleted so finished downloads still have something to point back at.
+            //
+            // Episodes are exempt: they arrive when a search asks for them, not from this loop,
+            // so judging them by whether this run touched them would retire every one of them
+            // every time. They are retired with their series instead, in SyncSeriesAsync.
             var deactivated = await db.Items
-                .Where(x => x.SourceId == sourceId && x.IsActive && x.LastSeenAt < runStamp)
+                .Where(x => x.SourceId == sourceId && x.IsActive && x.LastSeenAt < runStamp
+                            && x.SeriesId == null)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsActive, false), ct);
 
             var fresh = await db.Sources.FirstAsync(x => x.Id == sourceId, ct);
             fresh.LastRefreshCompletedAt = clock.GetUtcNow();
             fresh.LastRefreshStatus = RefreshStatus.Success;
             fresh.LastRefreshError = null;
-            fresh.TotalEntries = total + (int)kept;
-            fresh.VodEntries = vod + (int)kept;
-
-            // Only a run that actually read every series may claim one, or the weekly full walk
-            // would keep pushing itself back and never happen.
-            if (wasFullWalk) fresh.LastFullRefreshAt = runStamp;
+            fresh.TotalEntries = total;
+            fresh.VodEntries = vod;
 
             await db.SaveChangesAsync(ct);
 
             var elapsed = Stopwatch.GetElapsedTime(started);
             logger.LogInformation(
-                "Refreshed {Source}: {Vod} on-demand of {Total} entries, {Added} new, {Kept} left alone, {Deactivated} retired, in {Elapsed}",
-                fresh.Name, vod, total, added, kept, deactivated, elapsed);
+                "Refreshed {Source}: {Vod} on-demand of {Total} entries, {Added} new, {Series} series listed, {Rechecked} re-read, {Deactivated} retired, in {Elapsed}",
+                fresh.Name, vod, total, added, series, rechecked, deactivated, elapsed);
 
-            return new RefreshResult(sourceId, total + (int)kept, vod + (int)kept, added, deactivated, elapsed);
+            return new RefreshResult(sourceId, total, vod, added, deactivated, elapsed);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -220,7 +214,8 @@ public class M3uRefreshService(
         }
     }
 
-    private static M3uItem Populate(
+    /// <summary>Shared with the lazy episode fetch, which stores the same shape of row.</summary>
+    internal static M3uItem Populate(
         M3uItem item, int sourceId, string key, IngestCandidate candidate,
         ParsedTitle parsed, DateTimeOffset stamp)
     {
@@ -237,7 +232,6 @@ public class M3uRefreshService(
         item.TvgLogo = Truncate(entry.TvgLogo, 2048);
         item.DurationSeconds = entry.DurationSeconds;
         item.SeriesId = Truncate(candidate.SeriesId, 64);
-        item.SeriesLastModified = candidate.SeriesLastModified;
         item.Kind = parsed.Kind;
         item.Title = Truncate(parsed.Title, 500) ?? string.Empty;
         item.SearchTitle = Truncate(parsed.SearchTitle, 500) ?? string.Empty;
@@ -264,9 +258,7 @@ public class M3uRefreshService(
             if (!XtreamCredentials.TryCreate(source.Location, source.Username, source.Password, out var creds, out var error))
                 throw new InvalidOperationException(error);
 
-            var known = await KnownSeriesAsync(source, ct);
-
-            await foreach (var candidate in xtream.EnumerateAsync(source, creds, known, ct))
+            await foreach (var candidate in xtream.EnumerateFilmsAsync(source, creds, ct))
                 yield return candidate;
 
             yield break;
@@ -293,76 +285,118 @@ public class M3uRefreshService(
     }
 
     /// <summary>
+    /// Brings the series list up to date, and does not touch a single episode list doing it.
+    /// One request however large the catalogue, against one request per series for the
+    /// episodes - which is why those are left until something asks for them.
+    /// </summary>
+    /// <returns>How many series the panel currently offers.</returns>
+    private async Task<int> SyncSeriesAsync(
+        AppDbContext db, M3uSource source, DateTimeOffset runStamp, CancellationToken ct)
+    {
+        if (source.Kind != M3uSourceKind.Xtream || !source.IncludeSeries) return 0;
+
+        if (!XtreamCredentials.TryCreate(source.Location, source.Username, source.Password, out var creds, out var error))
+            throw new InvalidOperationException(error);
+
+        progress.Begin(source.Id, "series list", null);
+
+        var (series, categories) = await xtream.ListSeriesAsync(source, creds, ct);
+
+        logger.LogInformation("{Source}: panel lists {Count} series; episodes are fetched when searched for",
+            source.Name, series.Count);
+
+        // Id and stamp only: thirty thousand tracked entities would cost more than the request.
+        var existing = await db.Series
+            .AsNoTracking()
+            .Where(x => x.SourceId == source.Id)
+            .Select(x => new { x.SeriesId, x.Id, x.EpisodesFetchedFor, x.EpisodesFetchedAt })
+            .ToDictionaryAsync(x => x.SeriesId, ct);
+
+        db.ChangeTracker.AutoDetectChangesEnabled = false;
+
+        var seen = 0;
+        var pending = 0;
+
+        foreach (var entry in series)
+        {
+            if (string.IsNullOrWhiteSpace(entry.SeriesId) || string.IsNullOrWhiteSpace(entry.Name)) continue;
+
+            seen++;
+
+            var parsed = ReleaseTitleParser.Parse(entry.Name, MediaKind.Series);
+
+            var row = new M3uSeries
+            {
+                SourceId = source.Id,
+                SeriesId = entry.SeriesId,
+                Name = Truncate(entry.Name, 500) ?? string.Empty,
+                Title = Truncate(parsed.Title, 500) ?? string.Empty,
+                SearchTitle = Truncate(parsed.SearchTitle, 500) ?? string.Empty,
+                Year = parsed.Year,
+                GroupTitle = Truncate(Lookup(categories, entry.CategoryId), 300),
+                Cover = Truncate(entry.Cover, 2048),
+                LastModified = entry.LastModified,
+                LastSeenAt = runStamp,
+                IsActive = true
+            };
+
+            if (existing.TryGetValue(entry.SeriesId, out var known))
+            {
+                // Carried over rather than reset: whatever episodes are on hand were fetched
+                // for the stamp they were fetched for, and a changed stamp is what makes them
+                // stale. Overwriting this would refetch every series that anyone had opened.
+                row.Id = known.Id;
+                row.EpisodesFetchedFor = known.EpisodesFetchedFor;
+                row.EpisodesFetchedAt = known.EpisodesFetchedAt;
+
+                db.Entry(row).State = EntityState.Modified;
+            }
+            else
+            {
+                db.Series.Add(row);
+            }
+
+            if (++pending >= BatchSize)
+            {
+                await db.SaveChangesAsync(ct);
+                db.ChangeTracker.Clear();
+                pending = 0;
+            }
+        }
+
+        if (pending > 0) await db.SaveChangesAsync(ct);
+
+        db.ChangeTracker.Clear();
+        db.ChangeTracker.AutoDetectChangesEnabled = true;
+
+        // A series that has left the panel takes its episodes with it. They are retired rather
+        // than deleted, for the same reason every other entry is: a finished download still
+        // points at one.
+        var gone = await db.Series
+            .Where(x => x.SourceId == source.Id && x.IsActive && x.LastSeenAt < runStamp)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsActive, false), ct);
+
+        if (gone > 0)
+        {
+            var orphaned = await db.Items
+                .Where(x => x.SourceId == source.Id && x.IsActive && x.SeriesId != null
+                            && !db.Series.Any(s => s.SourceId == source.Id && s.SeriesId == x.SeriesId && s.IsActive))
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsActive, false), ct);
+
+            logger.LogInformation("{Source}: {Gone} series have left the panel, retiring {Orphaned} of their episodes",
+                source.Name, gone, orphaned);
+        }
+
+        return seen;
+    }
+
+    private static string? Lookup(IReadOnlyDictionary<string, string> categories, string? id) =>
+        id is not null && categories.TryGetValue(id, out var name) ? name : null;
+
+    /// <summary>
     /// The playlist, and how many bytes of it to expect. The length is null when the provider
     /// streams without declaring one, which is the case with no denominator to show.
     /// </summary>
-    /// <summary>
-    /// Marks the episodes of every series that was left alone as seen on this run, so the
-    /// reconcile treats them as present rather than gone. Returns how many rows that was.
-    /// </summary>
-    private async Task<long> KeepUnchangedAsync(
-        AppDbContext db, int sourceId, DateTimeOffset runStamp, CancellationToken ct)
-    {
-        var skipped = xtream.UnchangedSeries;
-        if (skipped.Count == 0) return 0;
-
-        long kept = 0;
-
-        foreach (var chunk in skipped.Chunk(KeepAliveChunk))
-        {
-            kept += await db.Items
-                .Where(x => x.SourceId == sourceId && x.SeriesId != null && chunk.Contains(x.SeriesId))
-                .ExecuteUpdateAsync(
-                    s => s.SetProperty(x => x.LastSeenAt, runStamp).SetProperty(x => x.IsActive, true), ct);
-        }
-
-        logger.LogInformation("{Source}: kept {Kept} episodes of {Series} unchanged series",
-            sourceId, kept, skipped.Count);
-
-        return kept;
-    }
-
-    /// <summary>
-    /// What the panel last said each series changed at, taken from the episodes already stored.
-    /// Empty on a full walk, which is what makes a full walk full.
-    /// </summary>
-    private async Task<IReadOnlyDictionary<string, long>> KnownSeriesAsync(M3uSource source, CancellationToken ct)
-    {
-        if (IsFullWalkDue(source))
-        {
-            logger.LogInformation(
-                "{Source}: reading every series this run{Because}",
-                source.Name,
-                source.LastFullRefreshAt is null
-                    ? ", because none has been read in full yet"
-                    : $", because the last full read was {source.LastFullRefreshAt:yyyy-MM-dd}");
-
-            return new Dictionary<string, long>();
-        }
-
-        await using var db = await dbFactory.CreateDbContextAsync(ct);
-
-        var known = await db.Items
-            .AsNoTracking()
-            .Where(x => x.SourceId == source.Id && x.SeriesId != null && x.SeriesLastModified != null)
-            .GroupBy(x => x.SeriesId!)
-            .Select(g => new { SeriesId = g.Key, Stamp = g.Max(x => x.SeriesLastModified!.Value) })
-            .ToDictionaryAsync(x => x.SeriesId, x => x.Stamp, ct);
-
-        logger.LogInformation("{Source}: {Known} series already read, checking which have changed",
-            source.Name, known.Count);
-
-        return known;
-    }
-
-    /// <summary>
-    /// Whether to ignore the panel's own last-changed stamps and read everything. A panel that
-    /// does not keep them current would otherwise hide new episodes for as long as it kept
-    /// getting away with it, so trusting them is time-limited rather than permanent.
-    /// </summary>
-    private bool IsFullWalkDue(M3uSource source) =>
-        source.Kind == M3uSourceKind.Xtream
-        && (source.LastFullRefreshAt is not { } last || clock.GetUtcNow() - last >= FullWalkEvery);
 
     private async Task<(Stream Stream, long? Length)> OpenAsync(M3uSource source, CancellationToken ct)
     {

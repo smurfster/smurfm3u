@@ -82,8 +82,7 @@ public static class XtreamCatalogue
                     entry,
                     new VodVerdict(true, MediaKind.Series, extension, "xtream series episode"),
                     parsed,
-                    series.SeriesId,
-                    series.LastModified);
+                    series.SeriesId);
             }
         }
     }

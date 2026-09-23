@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Smurfm3u.Data;
@@ -12,9 +13,11 @@ using Smurfm3u.Data;
 namespace Smurfm3u.Data.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260923115501_LazySeriesEpisodes")]
+    partial class LazySeriesEpisodes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -222,6 +225,9 @@ namespace Smurfm3u.Data.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
+                    b.Property<long?>("SeriesLastModified")
+                        .HasColumnType("bigint");
+
                     b.Property<long>("SizeBytes")
                         .HasColumnType("bigint");
 
@@ -365,6 +371,9 @@ namespace Smurfm3u.Data.Migrations
 
                     b.Property<int>("Kind")
                         .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("LastFullRefreshAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<DateTimeOffset?>("LastRefreshCompletedAt")
                         .HasColumnType("timestamp with time zone");

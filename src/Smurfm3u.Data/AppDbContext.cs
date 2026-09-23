@@ -7,6 +7,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 {
     public DbSet<M3uSource> Sources => Set<M3uSource>();
     public DbSet<M3uItem> Items => Set<M3uItem>();
+    public DbSet<M3uSeries> Series => Set<M3uSeries>();
     public DbSet<DownloadItem> Downloads => Set<DownloadItem>();
     public DbSet<SearchHistoryEntry> Searches => Set<SearchHistoryEntry>();
     public DbSet<SpeedLimitWindow> SpeedLimits => Set<SpeedLimitWindow>();
@@ -30,6 +31,27 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.RefreshCron).HasMaxLength(100);
             e.Property(x => x.LastRefreshError).HasMaxLength(2000);
             e.HasIndex(x => x.Name).IsUnique();
+        });
+
+        b.Entity<M3uSeries>(e =>
+        {
+            e.Property(x => x.SeriesId).HasMaxLength(64).IsRequired();
+            e.Property(x => x.Name).HasMaxLength(500).IsRequired();
+            e.Property(x => x.Title).HasMaxLength(500);
+            e.Property(x => x.SearchTitle).HasMaxLength(500);
+            e.Property(x => x.GroupTitle).HasMaxLength(300);
+            e.Property(x => x.Cover).HasMaxLength(2048);
+
+            // One row per series per source, which is what a refresh reconciles against.
+            e.HasIndex(x => new { x.SourceId, x.SeriesId }).IsUnique();
+
+            // A search looks a series up by its title before deciding whether to fetch it.
+            e.HasIndex(x => x.SearchTitle).HasMethod("gin").HasOperators("gin_trgm_ops");
+
+            e.HasOne(x => x.Source)
+                .WithMany()
+                .HasForeignKey(x => x.SourceId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<M3uItem>(e =>

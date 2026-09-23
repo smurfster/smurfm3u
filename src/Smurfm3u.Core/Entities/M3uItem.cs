@@ -33,12 +33,6 @@ public class M3uItem
     /// </summary>
     public string? SeriesId { get; set; }
 
-    /// <summary>
-    /// What the panel said the series was last changed at, as it said it. Compared against the
-    /// next refresh to decide whether the episode list is worth fetching at all.
-    /// </summary>
-    public long? SeriesLastModified { get; set; }
-
     public MediaKind Kind { get; set; }
 
     /// <summary>Cleaned show/film title, e.g. "Top Gear".</summary>

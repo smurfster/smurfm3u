@@ -63,13 +63,6 @@ public class M3uSource
     public string? Headers { get; set; }
 
     public DateTimeOffset? LastRefreshStartedAt { get; set; }
-
-    /// <summary>
-    /// When every series was last actually read, rather than taken on trust from the panel's
-    /// own last-changed stamp. A panel that does not keep that stamp up to date would otherwise
-    /// hide new episodes forever, so one run a week ignores it and reads the lot.
-    /// </summary>
-    public DateTimeOffset? LastFullRefreshAt { get; set; }
     public DateTimeOffset? LastRefreshCompletedAt { get; set; }
     public RefreshStatus LastRefreshStatus { get; set; } = RefreshStatus.Never;
     public string? LastRefreshError { get; set; }

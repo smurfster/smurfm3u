@@ -40,6 +40,7 @@ public sealed record SearchResults(IReadOnlyList<SearchHit> Hits, int Total, boo
 public class SearchService(
     IDbContextFactory<AppDbContext> dbFactory,
     SettingsService settingsService,
+    SeriesBackfill backfill,
     ILogger<SearchService> logger)
 {
     public const int MoviesCategory = 2000;
@@ -50,6 +51,12 @@ public class SearchService(
         var settings = await settingsService.GetAsync(ct);
         var limit = Math.Clamp(request.Limit, 1, settings.MaxSearchResults);
         var tokens = Tokenize(request.Query);
+
+        // A panel's episodes are fetched when something asks about the series rather than all
+        // of them in advance, so the asking is what brings them in. Only for a query naming
+        // something: a browse has nothing to name, and a film search has no series to fetch.
+        if (tokens.Count > 0 && request.Kind is SearchKind.Search or SearchKind.TvSearch)
+            await backfill.EnsureEpisodesAsync(tokens, ct);
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
@@ -67,6 +74,26 @@ public class SearchService(
 
         if (items.Count > 0)
             return new SearchResults(Project(items, settings), await strict.CountAsync(ct), false);
+
+        // Nothing here. If the words name a panel series, what we hold of it is only as new as
+        // the last refresh, so an episode added since would be invisible however often it was
+        // asked for. A miss is reason enough to look again; the backfill decides how often.
+        if (request.Kind is SearchKind.Search or SearchKind.TvSearch
+            && await backfill.RecheckOnMissAsync(tokens, ct) > 0)
+        {
+            items = await ordered
+                .Skip(Math.Max(0, request.Offset))
+                .Take(limit)
+                .ToListAsync(ct);
+
+            if (items.Count > 0)
+            {
+                logger.LogInformation("\"{Query}\" was not here a moment ago; the panel has it now",
+                    request.Query);
+
+                return new SearchResults(Project(items, settings), await strict.CountAsync(ct), false);
+            }
+        }
 
         // Every word has to appear, so one word the playlist does not use sinks the whole
         // query. Rather than answer nothing, fall back to the closest entries we do have.
