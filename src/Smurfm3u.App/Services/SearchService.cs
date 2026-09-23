@@ -50,6 +50,13 @@ public class SearchService(
     {
         var settings = await settingsService.GetAsync(ct);
         var limit = Math.Clamp(request.Limit, 1, settings.MaxSearchResults);
+
+        // "lanterns s01e01" carries its season and episode in the words. Left there they are
+        // words the title has to contain, and it never will: titles are stored with them
+        // stripped and the numbers in their own columns. Taken out here, they narrow the
+        // search the same way the *arrs' own season and episode parameters do.
+        request = Interpret(request);
+
         var tokens = Tokenize(request.Query);
 
         // A panel's episodes are fetched when something asks about the series rather than all
@@ -168,6 +175,27 @@ public class SearchService(
         return (
             Expression.Lambda<Func<M3uItem, bool>>(any!, parameter),
             Expression.Lambda<Func<M3uItem, int>>(score!, parameter));
+    }
+
+    /// <summary>
+    /// The request with any season and episode lifted out of the query text. What the client
+    /// sent explicitly always wins: a client that names them in both places means the
+    /// parameters, and only a query that carries them alone is reinterpreted.
+    /// </summary>
+    private static SearchRequest Interpret(SearchRequest request)
+    {
+        if (request.Season is not null || request.Episode is not null) return request;
+
+        var interpreted = SearchQuery.Interpret(request.Query);
+
+        return interpreted.Season is null && interpreted.Episode is null
+            ? request
+            : request with
+            {
+                Query = interpreted.Text,
+                Season = interpreted.Season,
+                Episode = interpreted.Episode
+            };
     }
 
     /// <summary>Everything except the words: what the request narrows to before matching.</summary>
