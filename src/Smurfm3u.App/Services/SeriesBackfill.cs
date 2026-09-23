@@ -135,6 +135,21 @@ public class SeriesBackfill(
         db.ChangeTracker.Clear();
         db.ChangeTracker.AutoDetectChangesEnabled = true;
 
+        // Everything the panel just returned was stamped with this fetch. Anything of this
+        // series still carrying an older one has been taken down since, so it is retired here
+        // - scoped to this series, because no other series was asked about.
+        //
+        // Without this a removed episode would stay on offer forever: the refresh exempts
+        // episodes from its own reconcile, so a re-fetch is the only place that can notice.
+        var withdrawn = await db.Items
+            .Where(x => x.SourceId == source.Id && x.SeriesId == series.SeriesId
+                        && x.IsActive && x.LastSeenAt < stamp)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsActive, false), ct);
+
+        if (withdrawn > 0)
+            logger.LogInformation("{Series}: {Count} episodes are no longer offered and have been retired",
+                series.Title, withdrawn);
+
         // Recorded against the stamp they were fetched for, so the next refresh moving it is
         // what marks them stale rather than a clock.
         await db.Series
