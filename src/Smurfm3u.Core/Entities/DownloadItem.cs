@@ -2,6 +2,11 @@ namespace Smurfm3u.Core.Entities;
 
 /// <summary>
 /// One grab. Surfaces as a SABnzbd queue slot while active and a history slot once finished.
+/// <para>
+/// A grab holds one or more <see cref="DownloadFile"/>s: one for an episode or a film, one per
+/// episode for a season pack. The counters here are the totals across them, because that is
+/// what a client sees - a pack is a single slot in the queue, not twenty-four.
+/// </para>
 /// </summary>
 public class DownloadItem
 {
@@ -16,13 +21,10 @@ public class DownloadItem
     /// <summary>SAB category the client asked for ("tv", "movies", ...).</summary>
     public string Category { get; set; } = string.Empty;
 
-    public long? M3uItemId { get; set; }
-    public M3uItem? M3uItem { get; set; }
-
     public int? SourceId { get; set; }
     public M3uSource? Source { get; set; }
 
-    public string StreamUrl { get; set; } = string.Empty;
+    public List<DownloadFile> Files { get; set; } = [];
 
     public DownloadStatus Status { get; set; } = DownloadStatus.Queued;
 
@@ -35,7 +37,9 @@ public class DownloadItem
     /// <summary>Instantaneous rate in bytes/sec, refreshed while downloading.</summary>
     public long BytesPerSecond { get; set; }
 
+    /// <summary>The folder under the incomplete directory that this grab is writing into.</summary>
     public string? IncompletePath { get; set; }
+
     public string? CompletedPath { get; set; }
 
     public string? FailureMessage { get; set; }

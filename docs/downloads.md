@@ -12,6 +12,22 @@ Two mechanisms combine, and the tightest active constraint wins:
 
 Per-playlist limits apply on top of whichever global limit is in force.
 
+## What one grab is
+
+A grab holds one or more files. A film or an episode is one; a
+[season pack](searching.md#season-packs) is one per episode. Either way it is a single queue
+slot, a single nzo id to the *arr apps, and a single folder on disk &mdash; the size and
+progress shown are the whole grab's.
+
+The files of a grab are transferred one after another rather than at once, so a pack counts
+once against the global and per-playlist concurrency limits and a playlist's speed cap
+governs the whole season.
+
+A file the provider no longer has is left out and the rest carry on. The grab completes with
+what it got and its history row says how many were missing, because the *arr apps import a
+folder file by file and will re-search whatever is not in it. A grab where nothing at all was
+still available fails, which is the answer the client needs in order to look elsewhere.
+
 ## Crashes and reboots
 
 Nothing has to be done by hand after a crash, a `docker kill`, or a host that loses power.

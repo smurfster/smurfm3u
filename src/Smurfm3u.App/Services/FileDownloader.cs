@@ -43,7 +43,7 @@ public class FileDownloader(
         await using var db = await dbFactory.CreateDbContextAsync(CancellationToken.None);
         var download = await db.Downloads
             .Include(x => x.Source)
-            .Include(x => x.M3uItem)
+            .Include(x => x.Files.OrderBy(f => f.Position))
             .FirstOrDefaultAsync(x => x.Id == downloadId, CancellationToken.None);
 
         if (download is null)
@@ -52,14 +52,23 @@ public class FileDownloader(
             return;
         }
 
-        var incompleteFile = BuildIncompletePath(settings, download);
+        if (download.Files.Count == 0)
+        {
+            logger.LogWarning("{Name} has nothing to download", download.Name);
+            await FailAsync(db, download, settings, new InvalidOperationException("This grab has no files."));
+            return;
+        }
+
+        // One folder per grab, named after the nzo id so two grabs of the same release cannot
+        // collide. A pack's episodes are all written into it, side by side.
+        var workFolder = Path.Combine(settings.IncompletePath, download.NzoId);
 
         try
         {
             download.Status = DownloadStatus.Downloading;
             download.StartedAt ??= clock.GetUtcNow();
             download.FailureMessage = null;
-            download.IncompletePath = incompleteFile;
+            download.IncompletePath = workFolder;
             await db.SaveChangesAsync(CancellationToken.None);
 
             // Only on the first attempt: a resume after a restart is not a new start.
@@ -69,15 +78,14 @@ public class FileDownloader(
                 [
                     new("Category", download.Category),
                     new("Playlist", download.Source?.Name),
+                    new("Files", download.Files.Count > 1 ? download.Files.Count.ToString() : null),
                     new("Size", NotificationComposer.FormatBytes(download.TotalBytes))
                 ]);
             }
 
-            var completed = await TransferAsync(db, download, handle, incompleteFile, ct);
-
-            if (!completed)
+            if (!await TransferAllAsync(db, download, handle, workFolder, ct))
             {
-                // Paused: keep the partial file so the next start resumes from where we stopped.
+                // Paused: keep the partial files so the next start resumes from where we stopped.
                 download.Status = DownloadStatus.Paused;
                 download.BytesPerSecond = 0;
                 await db.SaveChangesAsync(CancellationToken.None);
@@ -85,20 +93,45 @@ public class FileDownloader(
                 return;
             }
 
-            download.CompletedPath = await FinishAsync(settings, download, incompleteFile);
+            var transferred = download.Files.Where(x => x.Status == DownloadFileStatus.Completed).ToList();
+
+            // Every file gone is not a download that finished with nothing in it; it is a
+            // release that is not there any more, and the client needs to hear that as a
+            // failure so it goes and looks somewhere else.
+            if (transferred.Count == 0)
+            {
+                throw new ContentGoneException(download.Files.Count == 1
+                    ? download.Files[0].FailureMessage ?? "The provider no longer has this file."
+                    : $"The provider no longer has any of the {download.Files.Count} files in this release.");
+            }
+
+            download.CompletedPath = await FinishAsync(settings, download, transferred, workFolder);
             download.Status = DownloadStatus.Completed;
             download.CompletedAt = clock.GetUtcNow();
             download.BytesPerSecond = 0;
-            download.DownloadedBytes = Interlocked.Read(ref handle.DownloadedBytes);
+            download.DownloadedBytes = transferred.Sum(x => x.DownloadedBytes);
             download.TotalBytes = Math.Max(download.TotalBytes, download.DownloadedBytes);
+
+            var missing = download.Files.Count - transferred.Count;
+
+            // Recorded but not fatal: the *arr apps import a folder file by file and will go
+            // looking for whatever is not in it, which is a better outcome than failing a
+            // whole season because one episode has been taken down.
+            download.FailureMessage = missing > 0
+                ? $"{missing} of {download.Files.Count} files were no longer available and were left out."
+                : null;
+
             await db.SaveChangesAsync(CancellationToken.None);
 
-            logger.LogInformation("Completed {Name} into {Path}", download.Name, download.CompletedPath);
+            logger.LogInformation("Completed {Name} into {Path}{Partial}",
+                download.Name, download.CompletedPath,
+                missing > 0 ? $" ({missing} file(s) missing)" : string.Empty);
 
             notifications.Notify(NotificationEvent.DownloadCompleted, download.Name,
             [
                 new("Category", download.Category),
                 new("Playlist", download.Source?.Name),
+                new("Files", download.Files.Count > 1 ? $"{transferred.Count} of {download.Files.Count}" : null),
                 new("Size", NotificationComposer.FormatBytes(download.DownloadedBytes)),
                 new("Took", Describe(download.StartedAt, download.CompletedAt)),
                 new("Folder", download.CompletedPath)
@@ -125,7 +158,7 @@ public class FileDownloader(
         }
         catch (Exception ex)
         {
-            await FailAsync(db, download, settings, incompleteFile, ex);
+            await FailAsync(db, download, settings, ex);
         }
         finally
         {
@@ -133,15 +166,94 @@ public class FileDownloader(
         }
     }
 
+    /// <summary>
+    /// Transfers each of the grab's outstanding files in turn. Returns false if the user
+    /// paused partway, which leaves everything on disk for the next start to carry on from.
+    /// <para>
+    /// A file the provider no longer has is set aside and the rest carry on; any other failure
+    /// is thrown, which puts the whole grab back in the queue with its finished files intact.
+    /// </para>
+    /// </summary>
+    private async Task<bool> TransferAllAsync(
+        AppDbContext db, DownloadItem download, ActiveDownload handle, string workFolder, CancellationToken ct)
+    {
+        Directory.CreateDirectory(workFolder);
+
+        // Shared across the whole grab, so a source's own speed cap governs the pack rather
+        // than being handed out afresh to each episode in it.
+        var sourceBucket = BuildSourceBucket(download.Source);
+
+        var files = download.Files.OrderBy(x => x.Position).ToList();
+
+        // Files settled on an earlier attempt are not fetched again; their bytes still count
+        // towards what the client sees, because they are still part of this grab.
+        var carried = files
+            .Where(x => x.Status == DownloadFileStatus.Completed)
+            .Sum(x => x.DownloadedBytes);
+
+        Interlocked.Exchange(ref handle.TotalBytes, download.TotalBytes);
+        Interlocked.Exchange(ref handle.DownloadedBytes, carried);
+
+        foreach (var file in files)
+        {
+            if (file.Status != DownloadFileStatus.Pending) continue;
+
+            var path = Path.Combine(
+                workFolder,
+                $"{ReleaseNameBuilder.SanitizePathSegment(file.Name)}.{Extension(file)}");
+
+            file.IncompletePath = path;
+
+            try
+            {
+                if (!await TransferAsync(db, download, file, handle, sourceBucket, carried, path, ct))
+                    return false;
+
+                file.Status = DownloadFileStatus.Completed;
+                carried += file.DownloadedBytes;
+            }
+            catch (ContentGoneException ex)
+            {
+                // One episode withdrawn should not cost the season. Set it aside, note why,
+                // and carry on; the caller fails the grab only if nothing at all survives.
+                file.Status = DownloadFileStatus.Skipped;
+                file.FailureMessage = ex.Message;
+                file.DownloadedBytes = 0;
+
+                TryDelete(path);
+
+                logger.LogWarning("{Name}: {File} is no longer available and has been left out",
+                    download.Name, file.Name);
+            }
+            finally
+            {
+                await db.SaveChangesAsync(CancellationToken.None);
+            }
+
+            // Recalculated from what the files actually declared, so a pack's estimate is
+            // replaced by real lengths as they come in rather than only at the end.
+            download.DownloadedBytes = carried;
+            download.TotalBytes = files.Sum(x => x.TotalBytes);
+            Interlocked.Exchange(ref handle.TotalBytes, download.TotalBytes);
+            await db.SaveChangesAsync(CancellationToken.None);
+        }
+
+        return true;
+    }
+
+    private static string Extension(DownloadFile file) =>
+        string.IsNullOrWhiteSpace(file.Extension) ? "mp4" : file.Extension;
+
     private async Task<bool> TransferAsync(
-        AppDbContext db, DownloadItem download, ActiveDownload handle, string incompleteFile, CancellationToken ct)
+        AppDbContext db, DownloadItem download, DownloadFile file, ActiveDownload handle,
+        TokenBucket? sourceBucket, long carried, string incompleteFile, CancellationToken ct)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(incompleteFile)!);
 
         var resumeFrom = File.Exists(incompleteFile) ? new FileInfo(incompleteFile).Length : 0L;
 
         var client = httpClientFactory.CreateClient("download");
-        using var request = new HttpRequestMessage(HttpMethod.Get, download.StreamUrl);
+        using var request = new HttpRequestMessage(HttpMethod.Get, file.StreamUrl);
         M3uRefreshService.ApplyHeaders(request, download.Source?.Headers);
 
         if (resumeFrom > 0)
@@ -152,7 +264,7 @@ public class FileDownloader(
         // A server that ignores our Range gives us the whole body again, so start over.
         if (resumeFrom > 0 && response.StatusCode != HttpStatusCode.PartialContent)
         {
-            logger.LogInformation("{Name}: server does not support resume, restarting", download.Name);
+            logger.LogInformation("{Name}: server does not support resume, restarting", file.Name);
             resumeFrom = 0;
         }
 
@@ -162,7 +274,7 @@ public class FileDownloader(
         // the download stops rather than spending its retries proving the same point.
         if (response.StatusCode is HttpStatusCode.NotFound or HttpStatusCode.Gone)
         {
-            if (download.M3uItemId is { } itemId)
+            if (file.M3uItemId is { } itemId)
             {
                 await db.Items
                     .Where(x => x.Id == itemId)
@@ -170,7 +282,7 @@ public class FileDownloader(
 
                 logger.LogWarning(
                     "{Name}: the provider no longer has this file ({Status}); the entry has been retired",
-                    download.Name, (int)response.StatusCode);
+                    file.Name, (int)response.StatusCode);
             }
 
             throw new ContentGoneException(
@@ -183,19 +295,18 @@ public class FileDownloader(
         // TotalBytes may be our own estimate, which a real transfer will rarely match.
         var contentLength = response.Content.Headers.ContentLength ?? 0;
         var expected = contentLength > 0 ? contentLength + resumeFrom : 0;
-        var total = expected > 0 ? expected : download.TotalBytes;
+        var total = expected > 0 ? expected : file.TotalBytes;
 
-        Interlocked.Exchange(ref handle.TotalBytes, total);
-        Interlocked.Exchange(ref handle.DownloadedBytes, resumeFrom);
+        if (total > 0) file.TotalBytes = total;
+        file.DownloadedBytes = resumeFrom;
 
-        if (total > 0) download.TotalBytes = total;
-        download.DownloadedBytes = resumeFrom;
+        // What the client sees is the whole grab, so a file's progress is added to whatever
+        // the files before it already contributed.
+        Interlocked.Exchange(ref handle.DownloadedBytes, carried + resumeFrom);
         await db.SaveChangesAsync(CancellationToken.None);
 
-        var sourceBucket = BuildSourceBucket(download.Source);
-
         await using var httpStream = await response.Content.ReadAsStreamAsync(ct);
-        await using var file = new FileStream(
+        await using var stream = new FileStream(
             incompleteFile,
             resumeFrom > 0 ? FileMode.Append : FileMode.Create,
             FileAccess.Write, FileShare.Read, BufferSize, useAsync: true);
@@ -211,7 +322,7 @@ public class FileDownloader(
         {
             if (handle.PauseRequested)
             {
-                await CheckpointAsync(db, download, file, downloaded, 0);
+                await CheckpointAsync(db, download, file, stream, downloaded, carried, 0);
                 return false;
             }
 
@@ -223,10 +334,10 @@ public class FileDownloader(
             if (sourceBucket is not null)
                 await sourceBucket.ConsumeAsync(read, ct);
 
-            await file.WriteAsync(buffer.AsMemory(0, read), ct);
+            await stream.WriteAsync(buffer.AsMemory(0, read), ct);
 
             downloaded += read;
-            Interlocked.Exchange(ref handle.DownloadedBytes, downloaded);
+            Interlocked.Exchange(ref handle.DownloadedBytes, carried + downloaded);
 
             var sampleElapsed = Stopwatch.GetElapsedTime(lastSampleAt);
             if (sampleElapsed >= TimeSpan.FromSeconds(1))
@@ -239,12 +350,12 @@ public class FileDownloader(
 
             if (Stopwatch.GetElapsedTime(lastFlush) >= ProgressInterval)
             {
-                await CheckpointAsync(db, download, file, downloaded, Interlocked.Read(ref handle.BytesPerSecond));
+                await CheckpointAsync(db, download, file, stream, downloaded, carried, Interlocked.Read(ref handle.BytesPerSecond));
                 lastFlush = Stopwatch.GetTimestamp();
             }
         }
 
-        await CheckpointAsync(db, download, file, downloaded, 0);
+        await CheckpointAsync(db, download, file, stream, downloaded, carried, 0);
 
         // A connection dropped mid-transfer ends the stream early and is indistinguishable
         // from a clean finish. Anything short of the declared length is a failure, not a
@@ -271,21 +382,29 @@ public class FileDownloader(
     /// after a hard reset safe rather than merely likely to work.
     /// </summary>
     private static async Task CheckpointAsync(
-        AppDbContext db, DownloadItem download, FileStream file, long downloaded, long rate)
+        AppDbContext db, DownloadItem download, DownloadFile file, FileStream stream,
+        long downloaded, long carried, long rate)
     {
-        file.Flush(flushToDisk: true);
+        stream.Flush(flushToDisk: true);
 
-        download.DownloadedBytes = downloaded;
+        file.DownloadedBytes = downloaded;
+
+        // The grab's counter is the files already finished plus how far this one has got,
+        // because that is the single number the queue shows for the whole slot.
+        download.DownloadedBytes = carried + downloaded;
         download.BytesPerSecond = rate;
         await db.SaveChangesAsync(CancellationToken.None);
     }
 
     /// <summary>
-    /// Moves the finished file into its own folder under the category directory, which is the
-    /// layout SABnzbd produces and the *arr apps expect to scan.
+    /// Moves the finished files into one folder under the category directory, which is the
+    /// layout SABnzbd produces and the *arr apps expect to scan. A single episode or film
+    /// lands as one file named after the release; a pack lands as one file per episode, each
+    /// named after its own, which is what lets the importer place them individually.
     /// </summary>
     private static async Task<string> FinishAsync(
-        Core.Options.ServiceSettings settings, DownloadItem download, string incompleteFile)
+        Core.Options.ServiceSettings settings, DownloadItem download,
+        IReadOnlyList<DownloadFile> transferred, string workFolder)
     {
         var category = ReleaseNameBuilder.SanitizePathSegment(
             string.IsNullOrWhiteSpace(download.Category) ? "other" : download.Category);
@@ -294,29 +413,35 @@ public class FileDownloader(
         var targetFolder = Path.Combine(settings.CompletePath, category, folderName);
         Directory.CreateDirectory(targetFolder);
 
-        var targetFile = Path.Combine(targetFolder, folderName + Path.GetExtension(incompleteFile));
-
-        // File.Move across volumes fails on some container setups, so fall back to a copy.
-        try
+        foreach (var file in transferred)
         {
-            File.Move(incompleteFile, targetFile, overwrite: true);
-        }
-        catch (IOException)
-        {
-            await using (var from = File.OpenRead(incompleteFile))
-            await using (var to = File.Create(targetFile))
-                await from.CopyToAsync(to);
+            if (file.IncompletePath is not { Length: > 0 } source || !File.Exists(source)) continue;
 
-            File.Delete(incompleteFile);
+            var targetFile = Path.Combine(
+                targetFolder,
+                ReleaseNameBuilder.SanitizePathSegment(file.Name) + Path.GetExtension(source));
+
+            // File.Move across volumes fails on some container setups, so fall back to a copy.
+            try
+            {
+                File.Move(source, targetFile, overwrite: true);
+            }
+            catch (IOException)
+            {
+                await using (var from = File.OpenRead(source))
+                await using (var to = File.Create(targetFile))
+                    await from.CopyToAsync(to);
+
+                File.Delete(source);
+            }
         }
 
-        TryCleanUpFolder(Path.GetDirectoryName(incompleteFile));
+        TryCleanUpFolder(workFolder);
         return targetFolder;
     }
 
     private async Task FailAsync(
-        AppDbContext db, DownloadItem download, Core.Options.ServiceSettings settings,
-        string incompleteFile, Exception ex)
+        AppDbContext db, DownloadItem download, Core.Options.ServiceSettings settings, Exception ex)
     {
         // Counted here rather than at the start of a run, so a restart that resumes a
         // download does not burn one of its retries. Only a real failure costs an attempt.
@@ -338,11 +463,8 @@ public class FileDownloader(
             download.Status = DownloadStatus.Failed;
             download.CompletedAt = clock.GetUtcNow();
 
-            if (settings.DeleteFailedFiles)
-            {
-                TryDelete(incompleteFile);
-                TryCleanUpFolder(Path.GetDirectoryName(incompleteFile));
-            }
+            if (settings.DeleteFailedFiles && download.IncompletePath is { Length: > 0 } workFolder)
+                TryDeleteFolder(workFolder);
 
             // Only once it has given up. Notifying per attempt would send three of these
             // for every download that was always going to fail.
@@ -374,13 +496,16 @@ public class FileDownloader(
             : $"{(int)elapsed.TotalHours}h {elapsed.Minutes}m";
     }
 
-    private static string BuildIncompletePath(Core.Options.ServiceSettings settings, DownloadItem download)
+    private static void TryDeleteFolder(string folder)
     {
-        var folderName = ReleaseNameBuilder.SanitizePathSegment(download.Name);
-        var extension = download.M3uItem?.Extension is { Length: > 0 } ext ? ext : "mp4";
-
-        // Keyed by nzo id so two grabs of the same release cannot collide.
-        return Path.Combine(settings.IncompletePath, download.NzoId, $"{folderName}.{extension}");
+        try
+        {
+            if (Directory.Exists(folder)) Directory.Delete(folder, recursive: true);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A locked partial file is not worth failing the whole download over.
+        }
     }
 
     private static void TryDelete(string path)

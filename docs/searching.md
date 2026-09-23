@@ -59,6 +59,69 @@ Language and quality badges (`EN -`, `|VIP|`, `[4K]`) are stripped, as are resol
 source and codec tokens that would otherwise leak into the title. The year is kept and
 placed where the *arr parsers expect it. Numeric titles such as `1917 (2019)` survive.
 
+## Season packs
+
+When a client searches for a season rather than a single episode &mdash; Sonarr's
+**Search Season**, which sends a season with no episode number &mdash; the whole season is
+offered as one release alongside the individual episodes:
+
+| | |
+| --- | --- |
+| `House.of.Knives.2025.S01.1080p.WEB-DL-Smurfm3u` | the pack, 8 files |
+| `House.of.Knives.2025.S01E01.1080p.WEB-DL-Smurfm3u` | one episode |
+| `House.of.Knives.2025.S01E02.1080p.WEB-DL-Smurfm3u` | one episode |
+
+A season name and no episode number is exactly how Sonarr is told a release covers the whole
+season, so it reads the pack for what it is and grabs it as one thing. Without packs a season
+search turns into one grab per episode, and a 24-episode season is 24 queue slots.
+
+Grabbing one produces a single queue slot whose size and progress are the whole season's. Its
+episodes are transferred one after another into one folder, each named after its own episode,
+which is the layout the importer walks file by file:
+
+```
+/downloads/complete/tv/House.of.Knives.2025.S01.1080p.WEB-DL-Smurfm3u/
+    House.of.Knives.2025.S01E01.1080p.WEB-DL-Smurfm3u.mkv
+    House.of.Knives.2025.S01E02.1080p.WEB-DL-Smurfm3u.mkv
+    ...
+```
+
+Because it is one grab, it takes one slot against the global and per-playlist download limits
+rather than one per episode, and a playlist's speed cap governs the season as a whole.
+
+### What a pack is, and is not
+
+A pack is not a stored thing. It is every episode of that season that the index happens to
+hold, worked out again when the grab arrives &mdash; so a grab that lands an hour after the
+search picks up an episode that turned up in between, and a season withdrawn in the meantime
+is refused rather than handed over as a list of dead links.
+
+There is also no way to know whether a season is *complete*: there is no episode count to
+check against, only what the playlist offers. A pack is "every episode we have of this
+season", which may be fewer than exist. Sonarr imports the folder file by file and goes
+looking for whatever is not in it, so a short pack costs a re-search rather than a wrong
+result.
+
+An episode withdrawn partway through a transfer is left out and the rest carry on; the grab
+still completes, and its history row says how many were missing. Only a season where nothing
+at all is still available fails outright.
+
+### Turning them off
+
+**Settings &rarr; Season packs** switches them off, which returns a season search to being
+answered episode by episode. **Minimum episodes** is the smallest season worth offering as a
+pack, two by default &mdash; below it a "pack" is a single episode under a name that hides
+which one it is.
+
+Two things worth knowing before leaving them on:
+
+- **Size estimates add up.** Sizes are estimated from runtime and quality when a playlist does
+  not declare one, and a pack's size is the sum of those estimates. An estimate that is 20%
+  out on one episode is 20% out on the whole season, which matters because the *arr apps
+  reject grabs on size limits and on free disk space.
+- **Nothing is saved on bandwidth.** The episodes are still fetched one at a time over one
+  request each. What a pack saves is queue slots, grabs and round trips through the *arr apps.
+
 ## By hand, in the web UI
 
 **Search** in the sidebar queries the same index Prowlarr does, without going through the

@@ -71,6 +71,19 @@ public class ServiceSettings
     /// <summary>Fallback size in MiB when neither a real size nor a runtime is known.</summary>
     public int FallbackSizeMib { get; set; } = 2048;
 
+    /// <summary>
+    /// Offer a whole season as one release when a client searches for a season. Sonarr asks
+    /// for these by name; without them a season search is answered episode by episode and
+    /// every one becomes its own grab.
+    /// </summary>
+    public bool SeasonPacks { get; set; } = true;
+
+    /// <summary>
+    /// How many episodes a season needs before it is worth offering as a pack. Below this a
+    /// "pack" is just a single episode under a name that hides which one it is.
+    /// </summary>
+    public int MinSeasonPackEpisodes { get; set; } = 2;
+
     /// <summary>Retry a failed download this many times before it lands in history as failed.</summary>
     public int MaxDownloadAttempts { get; set; } = 3;
 

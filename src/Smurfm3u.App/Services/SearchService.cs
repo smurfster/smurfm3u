@@ -18,12 +18,19 @@ public sealed record SearchRequest(
     int Offset,
     int Limit);
 
+/// <summary>
+/// One offered release. <paramref name="DownloadId"/> is what a client grabs it by: a plain
+/// entry id for a single episode or film, a <see cref="SeasonPackId"/> for a whole season.
+/// <paramref name="Item"/> is the entry behind it, or a stand-in for the season.
+/// </summary>
 public sealed record SearchHit(
     M3uItem Item,
     string ReleaseName,
     long SizeBytes,
     int Category,
-    int SubCategory);
+    int SubCategory,
+    string DownloadId,
+    int FileCount = 1);
 
 /// <summary>
 /// One answered query. <paramref name="Relaxed"/> says the words were not all found and the
@@ -41,6 +48,7 @@ public class SearchService(
     IDbContextFactory<AppDbContext> dbFactory,
     SettingsService settingsService,
     SeriesBackfill backfill,
+    SeasonPackService seasonPacks,
     ILogger<SearchService> logger)
 {
     public const int MoviesCategory = 2000;
@@ -80,7 +88,14 @@ public class SearchService(
             .ToListAsync(ct);
 
         if (items.Count > 0)
-            return new SearchResults(Project(items, settings), await strict.CountAsync(ct), false);
+        {
+            var packs = await PacksAsync(request, strict, settings, ct);
+
+            return new SearchResults(
+                [.. packs, .. Project(items, settings)],
+                await strict.CountAsync(ct) + packs.Count,
+                false);
+        }
 
         // Nothing here. If the words name a panel series, what we hold of it is only as new as
         // the last refresh, so an episode added since would be invisible however often it was
@@ -98,7 +113,12 @@ public class SearchService(
                 logger.LogInformation("\"{Query}\" was not here a moment ago; the panel has it now",
                     request.Query);
 
-                return new SearchResults(Project(items, settings), await strict.CountAsync(ct), false);
+                var packs = await PacksAsync(request, strict, settings, ct);
+
+                return new SearchResults(
+                    [.. packs, .. Project(items, settings)],
+                    await strict.CountAsync(ct) + packs.Count,
+                    false);
             }
         }
 
@@ -114,6 +134,36 @@ public class SearchService(
                 request.Query, near.Count);
 
         return new SearchResults(Project(near, settings), near.Count, near.Count > 0);
+    }
+
+    /// <summary>
+    /// The season-pack releases this search should be offered alongside its episodes.
+    /// <para>
+    /// Only for a season search - a client that named a season is asking about the season, and
+    /// a pack is the answer to that question rather than to "which episodes do you have". Only
+    /// on the first page, too: a pack covers the whole season however the episodes are paged,
+    /// so repeating it on page two would just be the same release again.
+    /// </para>
+    /// </summary>
+    private async Task<IReadOnlyList<SearchHit>> PacksAsync(
+        SearchRequest request, IQueryable<M3uItem> matched, ServiceSettings settings, CancellationToken ct)
+    {
+        if (!settings.SeasonPacks) return [];
+        if (request.Offset > 0) return [];
+        if (request.Kind is not (SearchKind.Search or SearchKind.TvSearch)) return [];
+        if (request.Season is not { } season || request.Episode is not null) return [];
+
+        var packs = await seasonPacks.BuildAsync(matched, season, settings, ct);
+
+        return packs.Select(pack =>
+        {
+            var representative = SeasonPackService.Representative(pack);
+            var (category, subCategory) = CategoriesFor(representative);
+
+            return new SearchHit(
+                representative, pack.Name, pack.SizeBytes, category, subCategory,
+                pack.Id.ToString(), pack.Episodes.Count);
+        }).ToList();
     }
 
     /// <summary>
@@ -244,7 +294,8 @@ public class SearchService(
                 ReleaseFactory.BuildName(item, item.Source),
                 SizeEstimator.Estimate(item, settings),
                 category,
-                subCategory);
+                subCategory,
+                item.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }).ToList();
 
     /// <summary>

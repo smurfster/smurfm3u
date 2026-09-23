@@ -8,7 +8,7 @@ demand, parsed into release metadata, and downloaded over plain HTTP.
 ```
 Prowlarr ──search──► /api  (Newznab)  ──► Postgres ──► parsed VOD entries
                         │
-Sonarr / Radarr ─grab──►│ t=get  ──► pseudo-.nzb (a pointer to one playlist entry)
+Sonarr / Radarr ─grab──►│ t=get  ──► pseudo-.nzb (pointers to playlist entries)
                         │
 Sonarr / Radarr ─send──► /api  (SABnzbd, mode=…) ──► queue ──► HTTP download
                                                                     │

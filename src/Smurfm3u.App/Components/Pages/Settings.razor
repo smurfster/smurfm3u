@@ -209,6 +209,29 @@ else
             entry called "Camp CrunchLabs". With this on, such a query falls back to the entries
             matching best, preferring longer and rarer words over short common ones.
         </div>
+
+        <div class="field inline-field">
+            <input type="checkbox" id="seasonPacks" @bind="settings.SeasonPacks" />
+            <label for="seasonPacks">Offer a whole season as one release when a season is searched for</label>
+        </div>
+        <div class="hint">
+            Sonarr's "Search Season" asks for a season rather than an episode, and a release
+            named for the season with no episode number is how it is told one covers the whole
+            thing. Off, a season search is answered episode by episode and each becomes its own
+            grab. A pack is a single queue slot writing one file per episode into one folder;
+            episodes no longer available are left out rather than failing the season.
+        </div>
+
+        <div class="field-grid">
+            <div class="field">
+                <label>Minimum episodes in a pack</label>
+                <input type="number" @bind="settings.MinSeasonPackEpisodes" />
+                <div class="hint">
+                    Below this a season is offered only as individual episodes, since a "pack"
+                    of one is just an episode under a name that hides which one it is.
+                </div>
+            </div>
+        </div>
     </div>
 
     <div class="card">
@@ -509,6 +532,7 @@ else
         settings.MaxDownloadAttempts = Math.Clamp(settings.MaxDownloadAttempts, 1, 20);
         settings.MaxSearchResults = Math.Clamp(settings.MaxSearchResults, 1, 1000);
         settings.RssFeedLimit = Math.Max(0, settings.RssFeedLimit);
+        settings.MinSeasonPackEpisodes = Math.Clamp(settings.MinSeasonPackEpisodes, 2, 1000);
         settings.ManualSpeedLimitKibps = Math.Max(0, settings.ManualSpeedLimitKibps);
         settings.SearchHistoryRetentionDays = Math.Max(0, settings.SearchHistoryRetentionDays);
         settings.DownloadHistoryRetentionDays = Math.Max(0, settings.DownloadHistoryRetentionDays);
@@ -708,6 +732,8 @@ else
         MaxSearchResults = source.MaxSearchResults,
         RssFeedLimit = source.RssFeedLimit,
         RelaxedSearchFallback = source.RelaxedSearchFallback,
+        SeasonPacks = source.SeasonPacks,
+        MinSeasonPackEpisodes = source.MinSeasonPackEpisodes,
         AssumedBitrateKbps = source.AssumedBitrateKbps,
         FallbackSizeMib = source.FallbackSizeMib,
         MaxDownloadAttempts = source.MaxDownloadAttempts,

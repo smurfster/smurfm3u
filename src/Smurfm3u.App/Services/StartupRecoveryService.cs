@@ -114,10 +114,14 @@ public class StartupRecoveryService(
         {
             await using var db = await dbFactory.CreateDbContextAsync(ct);
 
-            var partials = await db.Downloads
+            // Per file, not per grab: a pack's recorded byte count is the total across its
+            // episodes, and trimming one file back to that would truncate the wrong thing.
+            var partials = await db.DownloadFiles
                 .AsNoTracking()
                 .Where(x => x.IncompletePath != null
-                            && (x.Status == DownloadStatus.Queued || x.Status == DownloadStatus.Paused))
+                            && x.Status == DownloadFileStatus.Pending
+                            && (x.Download!.Status == DownloadStatus.Queued
+                                || x.Download.Status == DownloadStatus.Paused))
                 .Select(x => new { x.Id, x.IncompletePath, x.DownloadedBytes })
                 .ToListAsync(ct);
 
@@ -148,7 +152,7 @@ public class StartupRecoveryService(
                 {
                     // Shorter than recorded: the file is the truth and the row is stale.
                     var onDisk = length;
-                    await db.Downloads
+                    await db.DownloadFiles
                         .Where(x => x.Id == partial.Id)
                         .ExecuteUpdateAsync(s => s.SetProperty(x => x.DownloadedBytes, onDisk), ct);
                 }

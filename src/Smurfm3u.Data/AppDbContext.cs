@@ -9,6 +9,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<M3uItem> Items => Set<M3uItem>();
     public DbSet<M3uSeries> Series => Set<M3uSeries>();
     public DbSet<DownloadItem> Downloads => Set<DownloadItem>();
+    public DbSet<DownloadFile> DownloadFiles => Set<DownloadFile>();
     public DbSet<SearchHistoryEntry> Searches => Set<SearchHistoryEntry>();
     public DbSet<SpeedLimitWindow> SpeedLimits => Set<SpeedLimitWindow>();
     public DbSet<AppUser> Users => Set<AppUser>();
@@ -95,7 +96,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.Property(x => x.NzoId).HasMaxLength(64).IsRequired();
             e.Property(x => x.Name).HasMaxLength(500).IsRequired();
             e.Property(x => x.Category).HasMaxLength(100);
-            e.Property(x => x.StreamUrl).HasMaxLength(2048);
             e.Property(x => x.IncompletePath).HasMaxLength(1024);
             e.Property(x => x.CompletedPath).HasMaxLength(1024);
             e.Property(x => x.FailureMessage).HasMaxLength(2000);
@@ -104,11 +104,31 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasIndex(x => new { x.Status, x.Priority, x.QueuedAt });
             e.HasIndex(x => x.CompletedAt);
 
-            // Keep finished rows readable after their playlist entry or source is gone.
-            e.HasOne(x => x.M3uItem).WithMany().HasForeignKey(x => x.M3uItemId).OnDelete(DeleteBehavior.SetNull);
+            // Keep finished rows readable after their source is gone.
             e.HasOne(x => x.Source).WithMany().HasForeignKey(x => x.SourceId).OnDelete(DeleteBehavior.SetNull);
 
             e.Ignore(x => x.IsActive);
+        });
+
+        b.Entity<DownloadFile>(e =>
+        {
+            e.Property(x => x.Name).HasMaxLength(500).IsRequired();
+            e.Property(x => x.Extension).HasMaxLength(10);
+            e.Property(x => x.StreamUrl).HasMaxLength(2048).IsRequired();
+            e.Property(x => x.IncompletePath).HasMaxLength(1024);
+            e.Property(x => x.FailureMessage).HasMaxLength(2000);
+
+            // The transfer loop reads a grab's files in order, and so does the queue endpoint.
+            e.HasIndex(x => new { x.DownloadId, x.Position });
+
+            // A file has no meaning without its grab, so it goes when the grab does.
+            e.HasOne(x => x.Download)
+                .WithMany(x => x.Files)
+                .HasForeignKey(x => x.DownloadId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // Keep finished rows readable after their playlist entry is gone.
+            e.HasOne(x => x.M3uItem).WithMany().HasForeignKey(x => x.M3uItemId).OnDelete(DeleteBehavior.SetNull);
         });
 
         b.Entity<SearchHistoryEntry>(e =>

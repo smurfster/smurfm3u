@@ -88,12 +88,18 @@
                             <div class="mono">@hit.ReleaseName</div>
                             <div class="muted" style="font-size:.8rem">@hit.Item.RawTitle</div>
                         </td>
-                        <td><span class="pill">@(hit.Item.Kind == MediaKind.Series ? "TV" : "Movie")</span></td>
+                        <td>
+                            <span class="pill">@(hit.Item.Kind == MediaKind.Series ? "TV" : "Movie")</span>
+                            @if (hit.FileCount > 1)
+                            {
+                                <span class="pill">@hit.FileCount episodes</span>
+                            }
+                        </td>
                         <td class="muted">@(hit.Item.Source?.Name ?? "-")</td>
                         <td class="numeric">@SabFormat.Size(hit.SizeBytes)</td>
                         <td class="muted">@hit.Item.FirstSeenAt.LocalDateTime.ToString("d MMM yyyy")</td>
                         <td>
-                            @if (queued.Contains(hit.Item.Id))
+                            @if (queued.Contains(hit.DownloadId))
                             {
                                 <span class="pill ok">Queued</span>
                             }
@@ -117,7 +123,7 @@
     private readonly List<SearchHit> hits = [];
 
     /// <summary>Entries queued from this page, so the button can say so without a reload.</summary>
-    private readonly HashSet<long> queued = [];
+    private readonly HashSet<string> queued = [];
 
     private string query = string.Empty;
     private SearchKind kind = SearchKind.Search;
@@ -219,9 +225,9 @@
             var settings = await SettingsStore.GetAsync();
             var category = hit.Item.Kind == MediaKind.Series ? settings.TvCategory : settings.MovieCategory;
 
-            await Downloads.EnqueueAsync(hit.Item.Id, category, priority: 0, nameOverride: null);
+            await Downloads.EnqueueAsync(hit.DownloadId, category, priority: 0, nameOverride: null);
 
-            queued.Add(hit.Item.Id);
+            queued.Add(hit.DownloadId);
             SetMessage($"Queued {hit.ReleaseName}.", isError: false);
         }
         catch (Exception ex)

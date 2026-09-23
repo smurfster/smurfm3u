@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Smurfm3u.App.Services;
 using Smurfm3u.Core.Entities;
 using Smurfm3u.Core.Models;
+using Smurfm3u.Core.Options;
 using Smurfm3u.Data;
 
 namespace Smurfm3u.App.Api;
@@ -19,6 +20,7 @@ namespace Smurfm3u.App.Api;
 [Route("newznab/api")]
 public class NewznabController(
     SearchService search,
+    SeasonPackService seasonPacks,
     SabnzbdHandler sab,
     SettingsService settingsService,
     IDbContextFactory<AppDbContext> dbFactory,
@@ -39,7 +41,9 @@ public class NewznabController(
         [FromQuery] int? season,
         [FromQuery] int? ep,
         [FromQuery] string? cat,
-        [FromQuery] long? id,
+        // A string, because a release is either one entry's id or a whole season's. A single
+        // entry still reads as the bare number it always was, so links already out there work.
+        [FromQuery] string? id,
         [FromQuery] int offset = 0,
         [FromQuery] int limit = 100,
         CancellationToken ct = default)
@@ -162,7 +166,8 @@ public class NewznabController(
 
     private XElement BuildItem(SearchHit hit, string apiKey)
     {
-        var link = $"{BaseUrl()}/api?t=get&id={hit.Item.Id}&apikey={Uri.EscapeDataString(apiKey)}";
+        var link = $"{BaseUrl()}/api?t=get&id={Uri.EscapeDataString(hit.DownloadId)}"
+                   + $"&apikey={Uri.EscapeDataString(apiKey)}";
         var published = hit.Item.FirstSeenAt.ToUniversalTime().ToString("r", CultureInfo.InvariantCulture);
 
         var element = new XElement("item",
@@ -181,11 +186,13 @@ public class NewznabController(
             Attr("category", hit.SubCategory),
             Attr("size", hit.SizeBytes),
             Attr("grabs", 0),
-            Attr("files", 1));
+            Attr("files", hit.FileCount));
 
         if (hit.Item.Season is { } season)
             element.Add(Attr("season", $"S{season:D2}"));
 
+        // Left off a season pack on purpose. A release with a season and no episode is how
+        // Sonarr is told this covers the whole season rather than one entry in it.
         if (hit.Item.Episode is { } episode)
             element.Add(Attr("episode", $"E{episode:D2}"));
 
@@ -199,10 +206,22 @@ public class NewznabController(
     /// Returns the pseudo-nzb for one playlist entry. This is what a grab downloads and then
     /// posts to our SABnzbd endpoint, which is how a search result becomes a queued download.
     /// </summary>
-    private async Task<IActionResult> GetNzbAsync(long? id, CancellationToken ct)
+    private async Task<IActionResult> GetNzbAsync(string? id, CancellationToken ct)
     {
-        if (id is not { } itemId)
+        if (string.IsNullOrWhiteSpace(id))
             return NewznabError(200, "Missing parameter (id)");
+
+        var settings = await settingsService.GetAsync(ct);
+
+        return SeasonPackId.TryParse(id, out var packId)
+            ? await SeasonNzbAsync(packId, settings, ct)
+            : await EntryNzbAsync(id, settings, ct);
+    }
+
+    private async Task<IActionResult> EntryNzbAsync(string id, ServiceSettings settings, CancellationToken ct)
+    {
+        if (!long.TryParse(id, System.Globalization.CultureInfo.InvariantCulture, out var itemId))
+            return NewznabError(300, "No such item");
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var item = await db.Items
@@ -213,7 +232,6 @@ public class NewznabController(
         if (item is null)
             return NewznabError(300, "No such item");
 
-        var settings = await settingsService.GetAsync(ct);
         var name = Core.Parsing.ReleaseFactory.BuildName(item, item.Source);
         var size = SizeEstimator.Estimate(item, settings);
 
@@ -221,6 +239,30 @@ public class NewznabController(
 
         var payload = System.Text.Encoding.UTF8.GetBytes(NzbDocument.Build(item.Id, name, size));
         return File(payload, "application/x-nzb", $"{name}.nzb");
+    }
+
+    /// <summary>
+    /// The pseudo-nzb for a whole season: one entry per episode, in episode order. Resolved
+    /// now rather than at search time, so a grab that arrives hours later gets the season as
+    /// it stands today.
+    /// </summary>
+    private async Task<IActionResult> SeasonNzbAsync(
+        SeasonPackId packId, ServiceSettings settings, CancellationToken ct)
+    {
+        var pack = await seasonPacks.ResolveAsync(packId, settings, ct);
+
+        if (pack is null)
+            return NewznabError(300, "No such item");
+
+        logger.LogInformation("Serving nzb for {Name}: {Count} episodes", pack.Name, pack.Episodes.Count);
+
+        var document = NzbDocument.Build(
+            [.. pack.Episodes.Select(x => x.Id)],
+            [.. pack.Episodes.Select(x => Core.Parsing.ReleaseFactory.BuildName(x, x.Source))],
+            pack.Name,
+            pack.SizeBytes);
+
+        return File(System.Text.Encoding.UTF8.GetBytes(document), "application/x-nzb", $"{pack.Name}.nzb");
     }
 
     private async Task RecordSearchAsync(
@@ -244,7 +286,10 @@ public class NewznabController(
                 ResultCount = hits.Count,
                 Relaxed = relaxed,
                 // Bounded: a client asking for a huge page should not write a huge row.
-                ResultItemIds = hits.Take(MaxRecordedResults).Select(x => x.Item.Id).ToList(),
+                // Packs are left out: they stand for entries rather than being one, so there
+                // is no row for the history page to link back to.
+                ResultItemIds = hits.Take(MaxRecordedResults)
+                    .Select(x => x.Item.Id).Where(x => x > 0).ToList(),
                 ElapsedMs = (int)elapsed.TotalMilliseconds,
                 ClientIp = HttpContext.Connection.RemoteIpAddress?.ToString(),
                 UserAgent = Request.Headers.UserAgent.ToString() is { Length: > 0 } ua ? ua : null,
