@@ -291,10 +291,19 @@ public class XtreamClient(
     private static string? Lookup(Dictionary<string, string> categories, string? id) =>
         id is not null && categories.TryGetValue(id, out var name) ? name : null;
 
-    /// <summary>The size to take next, under the lock because requests in flight are moving it.</summary>
-    private int CurrentBatchSize
+    /// <summary>
+    /// How many to ask for at once right now, under the lock because requests already in
+    /// flight are moving it. A ceiling the panel is allowed to lower, not a promise.
+    /// </summary>
+    public int Concurrency
     {
         get { lock (gate) return pace.Batch; }
+    }
+
+    /// <summary>Applies a playlist's own ceiling before a run of fetches.</summary>
+    public void UseCeiling(int most)
+    {
+        lock (gate) pace = new XtreamPace(most);
     }
 
     /// <summary>"1 category" rather than "1 categories"; these lines are meant to be read.</summary>

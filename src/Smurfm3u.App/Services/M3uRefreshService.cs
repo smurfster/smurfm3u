@@ -232,7 +232,6 @@ public class M3uRefreshService(
         item.TvgLogo = Truncate(entry.TvgLogo, 2048);
         item.DurationSeconds = entry.DurationSeconds;
         item.SeriesId = Truncate(candidate.SeriesId, 64);
-        item.SeriesLastModified = candidate.SeriesLastModified;
         item.Kind = parsed.Kind;
         item.Title = Truncate(parsed.Title, 500) ?? string.Empty;
         item.SearchTitle = Truncate(parsed.SearchTitle, 500) ?? string.Empty;

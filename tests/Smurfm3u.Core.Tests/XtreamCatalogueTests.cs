@@ -230,21 +230,17 @@ public class XtreamCatalogueTests
     }
 
     [Fact]
-    public void CarriesTheSeriesAndItsStampOntoEveryEpisode()
+    public void CarriesTheSeriesOntoEveryEpisode()
     {
-        // Without these on the episode there is no way to mark a series as still present
-        // without fetching it again, which is the whole point of storing them.
+        // Without this there is no way to mark a series as still present, or to retire one
+        // that has gone, without fetching every episode again.
         var series = Series("""{"series_id":99,"name":"Top Gear","last_modified":"1790085182"}""");
         var info = Parse<XtreamSeriesInfo>("""{"episodes":{"1":[{"id":"1","episode_num":1},{"id":"2","episode_num":2}]}}""");
 
         var episodes = XtreamCatalogue.ForSeries(series, info, null, Panel).ToList();
 
         Assert.Equal(2, episodes.Count);
-        Assert.All(episodes, e =>
-        {
-            Assert.Equal("99", e.SeriesId);
-            Assert.Equal(1790085182L, e.SeriesLastModified);
-        });
+        Assert.All(episodes, e => Assert.Equal("99", e.SeriesId));
     }
 
     [Fact]
@@ -254,7 +250,6 @@ public class XtreamCatalogueTests
             Parse<XtreamVodStream>("""{"stream_id":1,"name":"A Film"}"""), null, Panel);
 
         Assert.Null(candidate.SeriesId);
-        Assert.Null(candidate.SeriesLastModified);
     }
 
     [Fact]
