@@ -40,6 +40,7 @@ public sealed record SearchResults(IReadOnlyList<SearchHit> Hits, int Total, boo
 public class SearchService(
     IDbContextFactory<AppDbContext> dbFactory,
     SettingsService settingsService,
+    SeriesBackfill backfill,
     ILogger<SearchService> logger)
 {
     public const int MoviesCategory = 2000;
@@ -50,6 +51,12 @@ public class SearchService(
         var settings = await settingsService.GetAsync(ct);
         var limit = Math.Clamp(request.Limit, 1, settings.MaxSearchResults);
         var tokens = Tokenize(request.Query);
+
+        // A panel's episodes are fetched when something asks about the series rather than all
+        // of them in advance, so the asking is what brings them in. Only for a query naming
+        // something: a browse has nothing to name, and a film search has no series to fetch.
+        if (tokens.Count > 0 && request.Kind is SearchKind.Search or SearchKind.TvSearch)
+            await backfill.EnsureEpisodesAsync(tokens, ct);
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 

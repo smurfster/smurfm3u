@@ -19,9 +19,6 @@ public class XtreamClient(
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
 
-    /// <summary>Series between progress lines during the episode walk.</summary>
-    private const int ProgressEvery = 200;
-
     /// <summary>Films between updates of the live progress the page watches.</summary>
     private const int ProgressSamples = 500;
 
@@ -74,23 +71,9 @@ public class XtreamClient(
     /// when the source asks for them. Nothing live is requested, so unlike a playlist there is
     /// nothing to filter back out afterwards.
     /// </summary>
-    /// <summary>
-    /// Series left alone this run because the panel says they have not changed. Their episodes
-    /// were never fetched, so the caller has to keep them alive itself or the reconcile will
-    /// retire the lot.
-    /// </summary>
-    public IReadOnlyCollection<string> UnchangedSeries => unchanged;
-
-    private readonly List<string> unchanged = [];
-
-    /// <param name="known">
-    /// What the panel last said each series changed at, from the previous refresh. Empty forces
-    /// every episode list to be read, which is what a full walk wants.
-    /// </param>
-    public async IAsyncEnumerable<IngestCandidate> EnumerateAsync(
+    public async IAsyncEnumerable<IngestCandidate> EnumerateFilmsAsync(
         M3uSource source,
         XtreamCredentials credentials,
-        IReadOnlyDictionary<string, long> known,
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         var client = httpClientFactory.CreateClient("playlist");
@@ -124,96 +107,41 @@ public class XtreamClient(
 
             yield return XtreamCatalogue.ForMovie(movie, Lookup(movieCategories, movie.CategoryId), credentials);
         }
+    }
 
-        if (!source.IncludeSeries)
-        {
-            logger.LogInformation("{Source}: series not requested, films only", source.Name);
-            yield break;
-        }
+    /// <summary>
+    /// Every series the panel offers, as a list, without their episodes. One request, a few
+    /// seconds, and the cheap half of the catalogue.
+    /// </summary>
+    public async Task<(IReadOnlyList<XtreamSeries> Series, IReadOnlyDictionary<string, string> Categories)>
+        ListSeriesAsync(M3uSource source, XtreamCredentials credentials, CancellationToken ct = default)
+    {
+        var client = httpClientFactory.CreateClient("playlist");
 
-        // The ceiling this playlist allows. Set before anything is asked for, and still only a
-        // ceiling: a panel that pushes back drops the refresh below it and earns its way back.
-        lock (gate) pace = new XtreamPace(source.SeriesConcurrency);
-
-        var seriesCategories = XtreamCatalogue.NameById(
-            await GetListAsync<XtreamCategory>(client, credentials.Api("get_series_categories"), headers, "get_series_categories", ct));
+        var categories = XtreamCatalogue.NameById(await GetListAsync<XtreamCategory>(
+            client, credentials.Api("get_series_categories"), source.Headers, "get_series_categories", ct));
 
         var series = await GetListAsync<XtreamSeries>(
-            client, credentials.Api("get_series"), headers, "get_series", ct);
+            client, credentials.Api("get_series"), source.Headers, "get_series", ct);
 
-        logger.LogInformation(
-            "{Source}: panel lists {Series} in {Categories}; reading episode lists {Batch} at a time",
-            source.Name, Count(series.Count, "series", "series"),
-            Count(seriesCategories.Count, "category", "categories"), CurrentBatchSize);
+        return (series, categories);
+    }
 
-        // A series the panel says has not changed since we last read it cannot have new
-        // episodes, and its episode list is one request each. This is the difference between
-        // asking thirty thousand times and asking about the handful that actually moved.
-        var readable = new List<XtreamSeries>();
+    /// <summary>
+    /// One series' episodes, asked for because something actually wants them. This is the
+    /// request the old refresh made thirty thousand times in advance.
+    /// </summary>
+    public async Task<IReadOnlyList<IngestCandidate>> EpisodesAsync(
+        M3uSource source,
+        XtreamCredentials credentials,
+        XtreamSeries series,
+        string? category,
+        CancellationToken ct = default)
+    {
+        var client = httpClientFactory.CreateClient("playlist");
+        var info = await SeriesInfoAsync(client, credentials, series, source.Headers, ct);
 
-        foreach (var candidate in series)
-        {
-            if (string.IsNullOrWhiteSpace(candidate.SeriesId)) continue;
-
-            if (candidate.LastModified is { } stamp
-                && known.TryGetValue(candidate.SeriesId, out var seen)
-                && seen == stamp)
-            {
-                unchanged.Add(candidate.SeriesId);
-                continue;
-            }
-
-            readable.Add(candidate);
-        }
-
-        if (unchanged.Count > 0)
-            logger.LogInformation(
-                "{Source}: {Unchanged} series unchanged since the last refresh, {Reading} to read",
-                source.Name, unchanged.Count, readable.Count);
-
-        var done = 0;
-        var nextReport = ProgressEvery;
-
-        // One series is one request, so it is the unit the waiting is actually made of.
-        // Counting episodes instead would jump by fifty for one series and by two for the next.
-        progress.Begin(source.Id, "series", readable.Count);
-
-        // Taken a slice at a time rather than pre-chunked, because the size shrinks if the
-        // panel starts refusing and a chunked sequence has already decided how it is split.
-        while (done < readable.Count)
-        {
-            ct.ThrowIfCancellationRequested();
-
-            var take = Math.Min(CurrentBatchSize, readable.Count - done);
-            var batch = readable.GetRange(done, take);
-
-            var infos = await Task.WhenAll(batch.Select(x => SeriesInfoAsync(client, credentials, x, headers, ct)));
-
-            for (var i = 0; i < batch.Count; i++)
-            {
-                if (infos[i] is not { } info) continue;
-
-                foreach (var candidate in XtreamCatalogue.ForSeries(
-                             batch[i], info, Lookup(seriesCategories, batch[i].CategoryId), credentials))
-                {
-                    yield return candidate;
-                }
-            }
-
-            done += batch.Count;
-            progress.Report(source.Id, done);
-
-            // A panel with thousands of series takes a while, and a silent hour reads as a hang.
-            // Counted to the next milestone rather than checked for a multiple: the batch size
-            // changes with the panel's mood, so a run of threes steps straight over every
-            // multiple of two hundred and the walk goes quiet while it is still working.
-            if (done >= nextReport)
-            {
-                logger.LogInformation("{Source}: {Done} of {Total} series read", source.Name, done, readable.Count);
-
-                while (nextReport <= done) nextReport += ProgressEvery;
-            }
-        }
+        return info is null ? [] : XtreamCatalogue.ForSeries(series, info, category, credentials).ToList();
     }
 
     /// <summary>
