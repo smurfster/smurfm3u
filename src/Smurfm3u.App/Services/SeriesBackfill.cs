@@ -77,6 +77,59 @@ public class SeriesBackfill(
     }
 
     /// <summary>
+    /// How soon a series that answered nothing may be asked about again.
+    /// <para>
+    /// The stamp that normally decides this only moves when a refresh reads the series list,
+    /// so between refreshes a new episode is invisible however often it is searched for. A
+    /// miss is reason enough to look again - but the *arrs search for every missing episode
+    /// they have, and without a limit each of those would be its own request.
+    /// </para>
+    /// </summary>
+    private static readonly TimeSpan RecheckAfterMiss = TimeSpan.FromHours(1);
+
+    /// <summary>
+    /// Re-reads a series the search just failed to answer from, whatever its stamp says.
+    /// Called only when nothing was found, and only once an hour per series.
+    /// </summary>
+    /// <returns>How many episodes were stored.</returns>
+    public async Task<int> RecheckOnMissAsync(IReadOnlyList<string> tokens, CancellationToken ct = default)
+    {
+        if (tokens.Count == 0) return 0;
+
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+
+        var cutoff = clock.GetUtcNow() - RecheckAfterMiss;
+        var query = db.Series.AsNoTracking().Where(x => x.IsActive);
+
+        foreach (var token in tokens)
+        {
+            var needle = token;
+            query = query.Where(x => EF.Functions.Like(x.SearchTitle, $"%{needle}%"));
+        }
+
+        var wanted = await query
+            .Where(x => x.EpisodesFetchedAt == null || x.EpisodesFetchedAt < cutoff)
+            .OrderBy(x => x.SearchTitle.Length)
+            .ThenBy(x => x.Id)
+            .Take(MostPerSearch)
+            .ToListAsync(ct);
+
+        if (wanted.Count == 0) return 0;
+
+        var stored = 0;
+
+        foreach (var series in wanted)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            logger.LogInformation("Nothing found for {Series} locally; asking the panel again", series.Title);
+            stored += await FetchAsync(db, series, ct);
+        }
+
+        return stored;
+    }
+
+    /// <summary>
     /// Makes sure the episodes of any series matching these words are on hand, fetching them
     /// if they are missing or if the panel has changed the series since they were fetched.
     /// </summary>

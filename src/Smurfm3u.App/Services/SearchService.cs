@@ -75,6 +75,26 @@ public class SearchService(
         if (items.Count > 0)
             return new SearchResults(Project(items, settings), await strict.CountAsync(ct), false);
 
+        // Nothing here. If the words name a panel series, what we hold of it is only as new as
+        // the last refresh, so an episode added since would be invisible however often it was
+        // asked for. A miss is reason enough to look again; the backfill decides how often.
+        if (request.Kind is SearchKind.Search or SearchKind.TvSearch
+            && await backfill.RecheckOnMissAsync(tokens, ct) > 0)
+        {
+            items = await ordered
+                .Skip(Math.Max(0, request.Offset))
+                .Take(limit)
+                .ToListAsync(ct);
+
+            if (items.Count > 0)
+            {
+                logger.LogInformation("\"{Query}\" was not here a moment ago; the panel has it now",
+                    request.Query);
+
+                return new SearchResults(Project(items, settings), await strict.CountAsync(ct), false);
+            }
+        }
+
         // Every word has to appear, so one word the playlist does not use sinks the whole
         // query. Rather than answer nothing, fall back to the closest entries we do have.
         if (!settings.RelaxedSearchFallback || tokens.Count < 2)
