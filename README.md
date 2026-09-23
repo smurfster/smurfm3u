@@ -1,4 +1,5 @@
-# Smurfm3u
+| Include series | Xtream panels only. Off reads the films and skips the episode walk |
+| Episode lists at once | Xtream panels only. The ceiling on how many episode lists are read together; a panel that pushes back still pulls the refresh below it |# Smurfm3u
 
 Presents one or more M3U playlists to the *arr stack as if they were a Usenet indexer and a
 download client. Prowlarr searches it over **Newznab**; Sonarr and Radarr grab from it over

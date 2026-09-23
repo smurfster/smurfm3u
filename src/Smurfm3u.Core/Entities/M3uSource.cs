@@ -30,6 +30,13 @@ public class M3uSource
     /// </summary>
     public bool IncludeSeries { get; set; } = true;
 
+    /// <summary>
+    /// How many episode lists an Xtream refresh asks for at once. The ceiling rather than the
+    /// rate: a panel that pushes back still drops the refresh below this and earns its way
+    /// back. Worth raising only on a panel that tolerates it, and lowering on one that does not.
+    /// </summary>
+    public int SeriesConcurrency { get; set; } = 4;
+
     public bool Enabled { get; set; } = true;
 
     /// <summary>Quality tag stamped onto every release name from this source, e.g. "WEB-DL".</summary>

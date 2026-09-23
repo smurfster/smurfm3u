@@ -15,6 +15,9 @@ Nothing yet.
 
 ### Added
 
+- **Episode lists at once** is now a per-playlist setting rather than a fixed four. It is a
+  ceiling rather than a rate: a panel that answers `429` still pulls the refresh below it and
+  earns its way back. Worth raising only on a panel the log shows no push-back from.
 - An Xtream refresh now reads **only the series that changed**. The panel already says when
   each series last changed, so the episode list is fetched only where it has moved: on a panel
   of 30,000 series that is hours of requests replaced by a handful. Episodes of a series left

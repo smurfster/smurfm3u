@@ -26,9 +26,12 @@ public sealed class XtreamPace
     private int stepUpAfter;
     private int clean;
 
+    /// <summary>More than this at once is not tuning, it is a denial of service.</summary>
+    public const int MostAtOnce = 16;
+
     public XtreamPace(int most, int stepUpAfter = DefaultStepUpAfter)
     {
-        Most = Math.Max(1, most);
+        Most = Math.Clamp(most, 1, MostAtOnce);
         Batch = Most;
         this.stepUpAfter = Math.Max(1, stepUpAfter);
     }

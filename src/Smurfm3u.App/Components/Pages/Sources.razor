@@ -102,8 +102,23 @@
                 </div>
                 <div class="hint">
                     The episode list is one request per series, so a panel with thousands of them
-                    takes a while to read. Films are a single request either way.
+                    takes a while to read. Films are a single request either way. After the first
+                    read only the series the panel says have changed are asked about again.
                 </div>
+
+                @if (editing.IncludeSeries)
+                {
+                    <div class="field" style="max-width:16rem;margin-top:.9rem">
+                        <label>Episode lists at once</label>
+                        <InputNumber @bind-Value="editing.SeriesConcurrency" />
+                        <div class="hint">
+                            A ceiling, not a rate: a panel that answers
+                            <span class="mono">429 Too Many Requests</span> pulls the refresh
+                            below this and it earns its way back. 4 suits most panels. Raise it
+                            only if the log shows no push-back; 1 is the gentlest.
+                        </div>
+                    </div>
+                }
 
                 <div class="actions" style="margin-top:.75rem">
                     <button type="button" @onclick="TestXtreamAsync" disabled="@testingPanel">
@@ -679,6 +694,7 @@ else
         public string? Username { get; set; }
         public string? Password { get; set; }
         public bool IncludeSeries { get; set; } = true;
+        public int SeriesConcurrency { get; set; } = 4;
 
         public bool Enabled { get; set; } = true;
         public string QualityTag { get; set; } = "WEB-DL";
@@ -699,6 +715,7 @@ else
             Username = source.Username,
             Password = source.Password,
             IncludeSeries = source.IncludeSeries,
+            SeriesConcurrency = source.SeriesConcurrency,
             Enabled = source.Enabled,
             QualityTag = source.QualityTag,
             ResolutionTag = source.ResolutionTag,
@@ -719,6 +736,7 @@ else
             source.Username = Blank(Username);
             source.Password = Blank(Password);
             source.IncludeSeries = IncludeSeries;
+            source.SeriesConcurrency = Math.Clamp(SeriesConcurrency, 1, XtreamPace.MostAtOnce);
 
             // A pasted get.php link carries the credentials in its query string. Split them out
             // and keep the bare address: stored once rather than twice, and the list of

@@ -111,4 +111,26 @@ public class XtreamPaceTests
         Assert.Equal(1, new XtreamPace(-3).Batch);
         Assert.Equal(1, new XtreamPace(1).Most);
     }
+
+    [Fact]
+    public void RefusesToAskForMoreAtOnceThanIsReasonable()
+    {
+        // The setting is typed into a box by a person, and the other end is an IPTV box.
+        Assert.Equal(XtreamPace.MostAtOnce, new XtreamPace(500).Most);
+        Assert.Equal(XtreamPace.MostAtOnce, new XtreamPace(500).Batch);
+    }
+
+    [Fact]
+    public void HonoursAHigherCeilingWhenOneIsAskedFor()
+    {
+        var pace = new XtreamPace(8, stepUpAfter: 10);
+
+        Assert.Equal(8, pace.Batch);
+
+        pace.Refused();
+        Assert.Equal(4, pace.Batch);
+
+        Answer(pace, 20);
+        Assert.Equal(5, pace.Batch);
+    }
 }

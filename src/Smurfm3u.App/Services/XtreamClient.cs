@@ -34,17 +34,17 @@ public class XtreamClient(
     private DateTimeOffset resumeAt = DateTimeOffset.MinValue;
 
     /// <summary>
-    /// How many series are read at once, moved up and down by how the panel is answering.
-    /// Per client, and the client is created per refresh, so it starts optimistic each time.
+    /// How many series are read at once, moved up and down by how the panel is answering and
+    /// capped by the playlist's own ceiling. Replaced when a walk starts, once the source being
+    /// walked is known; the client is created per refresh, so it starts optimistic each time.
     /// </summary>
-    private readonly XtreamPace pace = new(SeriesBatchSize);
+    private XtreamPace pace = new(DefaultSeriesConcurrency);
 
     /// <summary>
-    /// How many series are asked about at once. The episode list is one request per series and
-    /// a panel may hold thousands, so this is the difference between an hour and a few minutes;
-    /// it stays small because the other end is someone's IPTV box, not a CDN.
+    /// What a playlist asks for when it has no opinion. The other end is someone's IPTV box
+    /// rather than a CDN, so the default is small and raising it is a per-playlist decision.
     /// </summary>
-    private const int SeriesBatchSize = 4;
+    private const int DefaultSeriesConcurrency = 4;
 
     /// <summary>
     /// Checks the login and returns what the panel says about the account. Panels answer 200
@@ -130,6 +130,10 @@ public class XtreamClient(
             logger.LogInformation("{Source}: series not requested, films only", source.Name);
             yield break;
         }
+
+        // The ceiling this playlist allows. Set before anything is asked for, and still only a
+        // ceiling: a panel that pushes back drops the refresh below it and earns its way back.
+        lock (gate) pace = new XtreamPace(source.SeriesConcurrency);
 
         var seriesCategories = XtreamCatalogue.NameById(
             await GetListAsync<XtreamCategory>(client, credentials.Api("get_series_categories"), headers, "get_series_categories", ct));
