@@ -857,9 +857,17 @@ input[type=checkbox] {
 /* ---- Cache ---- */
 
 /* The playlist whose contents are open below, so the two halves of the page are
-   visibly one thing rather than two lists that happen to be stacked. */
+   visibly one thing rather than two lists that happen to be stacked.
+
+   Tinted with the accent rather than a surface colour: --bg-input and --bg-raised are
+   both #ffffff in the light theme, so a surface tint marked the row only in the dark
+   one and left it indistinguishable in the other. */
 .row-selected > td {
-    background: var(--bg-input);
+    background: rgb(var(--accent-rgb) / 0.08);
+}
+
+.row-selected > td:first-child {
+    box-shadow: inset 3px 0 0 var(--accent);
 }
 
 /* Series drill-down. Indented rather than nested in tables, because a table inside a
@@ -872,12 +880,13 @@ input[type=checkbox] {
     border-left: 2px solid var(--border);
 }
 
-.cache-season > label {
+/* Not a label, because it holds a button as well as the checkbox: a button inside a
+   label is invalid, and it makes the whole row a hit target for the tick when half of
+   it is meant to expand instead. */
+.cache-season-row {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-weight: normal;
-    margin: 0;
 }
 
 .cache-episodes {
@@ -903,8 +912,22 @@ input[type=checkbox] {
     margin: 0;
 }
 
+/* Panels put whatever they like in an episode title, including the series name and the
+   episode number again. One line each, cut off where it runs out of room, with the whole
+   thing on the title attribute. */
+.cache-episodes > label > .episode-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 .cache-tree input[type="checkbox"],
 .cache-episodes input[type="checkbox"] {
     width: auto;
     margin: 0;
+}
+
+/* A date is never worth wrapping onto a second line. */
+.nowrap {
+    white-space: nowrap;
 }

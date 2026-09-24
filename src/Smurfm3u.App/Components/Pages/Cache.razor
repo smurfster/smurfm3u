@@ -133,7 +133,7 @@ else
                         <th>Series</th>
                         <th class="numeric">Seasons</th>
                         <th class="numeric">Episodes</th>
-                        <th>Episodes read</th>
+                        <th>Last read</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -155,7 +155,7 @@ else
                             </td>
                             <td class="numeric">@show.Seasons</td>
                             <td class="numeric">@show.Episodes.ToString("N0")</td>
-                            <td class="muted">@FetchedLabel(show)</td>
+                            <td class="muted nowrap" title="@FetchedTitle(show)">@FetchedLabel(show)</td>
                         </tr>
 
                         @if (expanded == show.Key)
@@ -173,8 +173,9 @@ else
                                             @foreach (var season in seasons)
                                             {
                                                 <div class="cache-season">
-                                                    <label>
+                                                    <div class="cache-season-row">
                                                         <input type="checkbox"
+                                                               aria-label="Select @SeasonLabel(season.Season)"
                                                                checked="@IsSeasonPicked(show, season.Season)"
                                                                @onchange="e => ToggleSeason(show, season.Season, e)" />
                                                         <button class="link-button" @onclick="() => ToggleSeasonOpenAsync(show, season.Season)">
@@ -182,7 +183,7 @@ else
                                                             @SeasonLabel(season.Season)
                                                         </button>
                                                         <span class="muted">@season.Episodes episode@(season.Episodes == 1 ? "" : "s")</span>
-                                                    </label>
+                                                    </div>
 
                                                     @if (openSeason == season.Season)
                                                     {
@@ -196,7 +197,7 @@ else
                                                                     <span class="mono">@EpisodeLabel(episode)</span>
                                                                     @if (episode.EpisodeTitle is { Length: > 0 } title)
                                                                     {
-                                                                        <span class="muted">@title</span>
+                                                                        <span class="muted episode-name" title="@title">@title</span>
                                                                     }
                                                                     @if (!episode.IsActive)
                                                                     {
@@ -261,7 +262,7 @@ else
                             </td>
                             <td class="numeric">@(film.Year?.ToString() ?? "-")</td>
                             <td class="muted">@(film.GroupTitle ?? "-")</td>
-                            <td class="muted">@film.FirstSeenAt.LocalDateTime.ToString("d MMM yyyy")</td>
+                            <td class="muted nowrap">@film.FirstSeenAt.LocalDateTime.ToString("d MMM yyyy")</td>
                         </tr>
                     }
                     </tbody>
@@ -710,9 +711,20 @@ else
     {
         if (selected?.Kind != M3uSourceKind.Xtream) return "with the playlist";
 
+        // A dash rather than "not recorded". Most of a panel's shows have never been read on
+        // demand - their episodes arrived with an earlier bulk import - so a column of
+        // "not recorded" reads as a page-wide fault rather than as nothing to report.
+        return show.FetchedAt is { } at ? at.LocalDateTime.ToString("d MMM yyyy, HH:mm") : "—";
+    }
+
+    private string FetchedTitle(CachedSeries show)
+    {
+        if (selected?.Kind != M3uSourceKind.Xtream)
+            return "These episodes arrive with the playlist, not one series at a time.";
+
         return show.FetchedAt is { } at
-            ? at.LocalDateTime.ToString("d MMM yyyy, HH:mm")
-            : "not recorded";
+            ? $"Episode list last read {at.LocalDateTime:dddd d MMMM yyyy, HH:mm:ss}"
+            : "No record of this series' episode list being read. The next search for it will read it.";
     }
 
     private void SetMessage(string text, bool isError)
