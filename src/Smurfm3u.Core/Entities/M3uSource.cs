@@ -63,7 +63,17 @@ public class M3uSource
     public string? Headers { get; set; }
 
     public DateTimeOffset? LastRefreshStartedAt { get; set; }
+
+    /// <summary>When the last run ended, whether it worked or not.</summary>
     public DateTimeOffset? LastRefreshCompletedAt { get; set; }
+
+    /// <summary>
+    /// When a run last worked. Separate from <see cref="LastRefreshCompletedAt"/> because a
+    /// run of failures would otherwise bury the answer to the question actually worth asking:
+    /// how old is the catalogue being served right now.
+    /// </summary>
+    public DateTimeOffset? LastSuccessfulRefreshAt { get; set; }
+
     public RefreshStatus LastRefreshStatus { get; set; } = RefreshStatus.Never;
     public string? LastRefreshError { get; set; }
 

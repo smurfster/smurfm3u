@@ -853,3 +853,58 @@ input[type=checkbox] {
 @media (max-width: 1100px) {
     .result-list { columns: 1; }
 }
+
+/* ---- Cache ---- */
+
+/* The playlist whose contents are open below, so the two halves of the page are
+   visibly one thing rather than two lists that happen to be stacked. */
+.row-selected > td {
+    background: var(--bg-input);
+}
+
+/* Series drill-down. Indented rather than nested in tables, because a table inside a
+   table row inherits the outer column widths and fights every layout decision. */
+.cache-tree {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+    padding: 0.2rem 0 0.5rem 0.4rem;
+    border-left: 2px solid var(--border);
+}
+
+.cache-season > label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: normal;
+    margin: 0;
+}
+
+.cache-episodes {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    margin: 0.25rem 0 0.5rem 1.4rem;
+    padding-left: 0.6rem;
+    border-left: 2px solid var(--border);
+
+    /* A season of a daily show runs to hundreds of episodes; the list scrolls rather
+       than pushing the rest of the page out of reach. */
+    max-height: 18rem;
+    overflow-y: auto;
+}
+
+.cache-episodes > label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: normal;
+    font-size: 0.85rem;
+    margin: 0;
+}
+
+.cache-tree input[type="checkbox"],
+.cache-episodes input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+}

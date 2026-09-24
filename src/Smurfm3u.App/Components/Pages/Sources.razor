@@ -230,6 +230,13 @@ else
                     <td class="mono">@TagPreview(source)</td>
                     <td>
                         <span class="pill @StatusClass(DisplayStatus(source))">@StatusLabel(DisplayStatus(source))</span>
+
+                        @* How old the catalogue being served actually is. Shown for every state,
+                           because it is most worth knowing precisely when the last run failed. *@
+                        <div class="muted" style="font-size:.8rem" title="@Exactly(source.LastSuccessfulRefreshAt)">
+                            @LastGoodLabel(source)
+                        </div>
+
                         @* The last run's error, but not while the next one is under way. *@
                         @if (!IsRefreshing(source) && source.LastRefreshError is { Length: > 0 })
                         {
@@ -677,6 +684,53 @@ else
         RefreshStatus.Failed => "bad",
         _ => ""
     };
+
+    /// <summary>
+    /// When this playlist last refreshed successfully, phrased for the state it is in. A
+    /// failed run does not replace the answer, it puts it in context: what is being served is
+    /// still whatever the last good run left behind, and its age is the thing worth knowing.
+    /// </summary>
+    private string LastGoodLabel(M3uSource source)
+    {
+        if (source.LastSuccessfulRefreshAt is not { } at)
+        {
+            return source.LastRefreshStatus == RefreshStatus.Failed
+                ? "never refreshed successfully"
+                : "not refreshed yet";
+        }
+
+        var ago = Ago(at);
+
+        return DisplayStatus(source) switch
+        {
+            RefreshStatus.Success => $"updated {ago}",
+            RefreshStatus.Running => $"last updated {ago}",
+            _ => $"still serving data from {ago}"
+        };
+    }
+
+    /// <summary>Rounded down and never more precise than it deserves; the title carries the rest.</summary>
+    private string Ago(DateTimeOffset at)
+    {
+        var elapsed = DateTimeOffset.UtcNow - at;
+
+        // A clock skew or a row written slightly ahead of us should read as "now", not as a
+        // negative age.
+        if (elapsed < TimeSpan.FromMinutes(1)) return "just now";
+        if (elapsed < TimeSpan.FromHours(1)) return Plural((int)elapsed.TotalMinutes, "minute");
+        if (elapsed < TimeSpan.FromDays(1)) return Plural((int)elapsed.TotalHours, "hour");
+        if (elapsed < TimeSpan.FromDays(30)) return Plural((int)elapsed.TotalDays, "day");
+
+        return at.LocalDateTime.ToString("d MMM yyyy");
+
+        static string Plural(int count, string unit) =>
+            $"{count} {unit}{(count == 1 ? string.Empty : "s")} ago";
+    }
+
+    private static string Exactly(DateTimeOffset? at) =>
+        at is { } value
+            ? $"Last successful refresh: {value.LocalDateTime:dddd d MMMM yyyy, HH:mm:ss}"
+            : "This playlist has never refreshed successfully.";
 
     /// <summary>Edit model, so a cancelled edit never leaves a half-changed entity tracked.</summary>
     private sealed class SourceForm

@@ -7,14 +7,16 @@
             <nav class="sidebar">
                 <div class="brand">Smurf<span>m3u</span></div>
                 <div class="nav">
+                    @* Day to day first, then what is set up once, then what is looked back at. *@
                     <NavLink href="" Match="NavLinkMatch.All"><Icon Name="IconName.Dashboard" />Dashboard</NavLink>
-                    <NavLink href="search"><Icon Name="IconName.Search" />Search</NavLink>
                     <NavLink href="queue"><Icon Name="IconName.Queue" />Queue</NavLink>
-                    <NavLink href="history"><Icon Name="IconName.DownloadHistory" />Download History</NavLink>
+                    <NavLink href="search"><Icon Name="IconName.Search" />Search</NavLink>
                     <NavLink href="sources"><Icon Name="IconName.Playlists" />Playlists</NavLink>
+                    <NavLink href="settings"><Icon Name="IconName.Settings" />Settings</NavLink>
+                    <NavLink href="cache"><Icon Name="IconName.Cache" />Cache</NavLink>
+                    <NavLink href="history"><Icon Name="IconName.DownloadHistory" />Download History</NavLink>
                     <NavLink href="searches"><Icon Name="IconName.SearchHistory" />Search History</NavLink>
                     <NavLink href="logs"><Icon Name="IconName.Logs" />Logs</NavLink>
-                    <NavLink href="settings"><Icon Name="IconName.Settings" />Settings</NavLink>
                 </div>
                 <div class="sidebar-footer">
                     <div class="version" title="@VersionTitle">@VersionLabel</div>

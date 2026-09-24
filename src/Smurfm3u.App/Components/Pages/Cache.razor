@@ -1,0 +1,723 @@
+@page "/cache"
+@using Smurfm3u.Core.Entities
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject CacheBrowserService Browser
+
+<PageTitle>Cache - Smurfm3u</PageTitle>
+
+<div class="page-header">
+    <h1>Cache</h1>
+    @if (selected is not null)
+    {
+        <div class="actions">
+            <button class="danger" disabled="@(busy || Picked == 0)" @onclick="ClearSelectedAsync">
+                Clear selected@(Picked > 0 ? $" ({Picked})" : "")
+            </button>
+            <button class="small danger" disabled="@busy" @onclick="ConfirmClearSourceAsync">
+                Clear this playlist
+            </button>
+        </div>
+    }
+</div>
+
+@if (message is not null)
+{
+    <div class="alert @(messageIsError ? "bad" : "ok")">@message</div>
+}
+
+<p class="muted">
+    What the playlists have put in the database, and what a query is answered from. Clearing is
+    not permanent: films and the series list come back on the next refresh, and a panel's
+    episodes come back the next time a search names their series.
+</p>
+
+@if (summaries.Count == 0)
+{
+    <div class="card empty">No playlists yet. Add one on the Playlists page.</div>
+}
+else
+{
+    <div class="card" style="padding:0">
+        <table>
+            <thead>
+            <tr>
+                <th>Playlist</th>
+                <th class="numeric">Films</th>
+                <th class="numeric">Episodes</th>
+                <th class="numeric">Series</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var summary in summaries)
+            {
+                <tr class="@(selected?.SourceId == summary.SourceId ? "row-selected" : null)">
+                    <td>
+                        <strong>@summary.Name</strong>
+                        <span class="pill" style="margin-left:.4rem">@KindLabel(summary.Kind)</span>
+                        @if (!summary.Enabled)
+                        {
+                            <span class="pill" style="margin-left:.4rem">Disabled</span>
+                        }
+                    </td>
+                    <td class="numeric">@summary.Films.ToString("N0")</td>
+                    <td class="numeric">@summary.Episodes.ToString("N0")</td>
+                    <td class="numeric">
+                        @if (summary.Kind == M3uSourceKind.Xtream)
+                        {
+                            @* Listed is the whole catalogue; read is the part that cost a request each. *@
+                            <span title="@summary.SeriesFetched.ToString("N0") read, @summary.SeriesListed.ToString("N0") listed">
+                                @summary.SeriesFetched.ToString("N0") / @summary.SeriesListed.ToString("N0")
+                            </span>
+                        }
+                        else
+                        {
+                            <span class="muted">&mdash;</span>
+                        }
+                    </td>
+                    <td>
+                        <button class="small" @onclick="() => OpenAsync(summary)">
+                            @(selected?.SourceId == summary.SourceId ? "Close" : "Browse")
+                        </button>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+}
+
+@if (selected is not null)
+{
+    <div class="page-header" style="margin-top:1.25rem">
+        <h2 style="margin:0">@selected.Name</h2>
+        <div class="actions">
+            <button class="small @(tab == Tab.Series ? "primary" : "")" @onclick="() => SwitchAsync(Tab.Series)">
+                Series
+            </button>
+            <button class="small @(tab == Tab.Films ? "primary" : "")" @onclick="() => SwitchAsync(Tab.Films)">
+                Films
+            </button>
+            <input placeholder="Filter by title" @bind="filter" @bind:event="oninput" @bind:after="ReloadAsync"
+                   style="width:220px" />
+            @if (Picked > 0)
+            {
+                <button class="small" @onclick="ClearSelection">Deselect all</button>
+            }
+        </div>
+    </div>
+
+    @if (Picked > 0)
+    {
+        <p class="muted">@SelectionLabel</p>
+    }
+
+    @if (tab == Tab.Series)
+    {
+        @if (series.Count == 0)
+        {
+            <div class="card empty">
+                @(string.IsNullOrWhiteSpace(filter)
+                    ? "No episodes cached for this playlist yet."
+                    : "No series match that filter.")
+            </div>
+        }
+        else
+        {
+            <div class="card" style="padding:0">
+                <table>
+                    <thead>
+                    <tr>
+                        <th style="width:2.5rem"></th>
+                        <th>Series</th>
+                        <th class="numeric">Seasons</th>
+                        <th class="numeric">Episodes</th>
+                        <th>Episodes read</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var show in series)
+                    {
+                        <tr>
+                            <td>
+                                <input type="checkbox" checked="@pickedSeries.ContainsKey(show.Key)"
+                                       @onchange="e => ToggleSeries(show, e)" />
+                            </td>
+                            <td>
+                                <button class="link-button" @onclick="() => ToggleExpandAsync(show)">
+                                    @(expanded == show.Key ? "▾" : "▸") @show.Title
+                                </button>
+                                @if (show.Year is { } year)
+                                {
+                                    <span class="muted"> (@year)</span>
+                                }
+                            </td>
+                            <td class="numeric">@show.Seasons</td>
+                            <td class="numeric">@show.Episodes.ToString("N0")</td>
+                            <td class="muted">@FetchedLabel(show)</td>
+                        </tr>
+
+                        @if (expanded == show.Key)
+                        {
+                            <tr>
+                                <td></td>
+                                <td colspan="4" style="padding-top:0">
+                                    @if (seasons.Count == 0)
+                                    {
+                                        <span class="muted">Nothing left in this series.</span>
+                                    }
+                                    else
+                                    {
+                                        <div class="cache-tree">
+                                            @foreach (var season in seasons)
+                                            {
+                                                <div class="cache-season">
+                                                    <label>
+                                                        <input type="checkbox"
+                                                               checked="@IsSeasonPicked(show, season.Season)"
+                                                               @onchange="e => ToggleSeason(show, season.Season, e)" />
+                                                        <button class="link-button" @onclick="() => ToggleSeasonOpenAsync(show, season.Season)">
+                                                            @(openSeason == season.Season ? "▾" : "▸")
+                                                            @SeasonLabel(season.Season)
+                                                        </button>
+                                                        <span class="muted">@season.Episodes episode@(season.Episodes == 1 ? "" : "s")</span>
+                                                    </label>
+
+                                                    @if (openSeason == season.Season)
+                                                    {
+                                                        <div class="cache-episodes">
+                                                            @foreach (var episode in episodes)
+                                                            {
+                                                                <label class="@(episode.IsActive ? null : "muted")">
+                                                                    <input type="checkbox"
+                                                                           checked="@pickedEntries.Contains(episode.Id)"
+                                                                           @onchange="e => ToggleEntry(episode.Id, e)" />
+                                                                    <span class="mono">@EpisodeLabel(episode)</span>
+                                                                    @if (episode.EpisodeTitle is { Length: > 0 } title)
+                                                                    {
+                                                                        <span class="muted">@title</span>
+                                                                    }
+                                                                    @if (!episode.IsActive)
+                                                                    {
+                                                                        <span class="pill">Retired</span>
+                                                                    }
+                                                                </label>
+                                                            }
+                                                        </div>
+                                                    }
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+    }
+    else
+    {
+        @if (films.Count == 0)
+        {
+            <div class="card empty">
+                @(string.IsNullOrWhiteSpace(filter)
+                    ? "No films cached for this playlist."
+                    : "No films match that filter.")
+            </div>
+        }
+        else
+        {
+            <div class="card" style="padding:0">
+                <table>
+                    <thead>
+                    <tr>
+                        <th style="width:2.5rem">
+                            <input type="checkbox" checked="@AllOnPagePicked" @onchange="TogglePage" />
+                        </th>
+                        <th>Film</th>
+                        <th class="numeric">Year</th>
+                        <th>Group</th>
+                        <th>First seen</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    @foreach (var film in films)
+                    {
+                        <tr class="@(film.IsActive ? null : "muted")">
+                            <td>
+                                <input type="checkbox" checked="@pickedEntries.Contains(film.Id)"
+                                       @onchange="e => ToggleEntry(film.Id, e)" />
+                            </td>
+                            <td>
+                                @film.Title
+                                @if (!film.IsActive)
+                                {
+                                    <span class="pill" style="margin-left:.4rem">Retired</span>
+                                }
+                            </td>
+                            <td class="numeric">@(film.Year?.ToString() ?? "-")</td>
+                            <td class="muted">@(film.GroupTitle ?? "-")</td>
+                            <td class="muted">@film.FirstSeenAt.LocalDateTime.ToString("d MMM yyyy")</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (total > films.Count)
+            {
+                <p class="muted">
+                    <button class="link-button" @onclick="SelectAllMatchingAsync">
+                        Select all @Math.Min(total, SelectAllCap).ToString("N0") films matching this filter
+                    </button>
+                    @if (total > SelectAllCap)
+                    {
+                        <span> &mdash; of @total.ToString("N0"). Clearing the whole playlist is the button for more.</span>
+                    }
+                </p>
+            }
+        }
+
+        <Pager Page="page" PageSize="pageSize" TotalCount="total"
+               PageChanged="GoToPageAsync" PageSizeChanged="SetPageSizeAsync" />
+    }
+
+    @if (tab == Tab.Series && total > 0)
+    {
+        <Pager Page="page" PageSize="pageSize" TotalCount="total"
+               PageChanged="GoToPageAsync" PageSizeChanged="SetPageSizeAsync" />
+    }
+}
+
+@if (confirming is { } pending)
+{
+    <div class="modal-backdrop" @onclick="() => confirming = null">
+        <div class="modal" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <strong>Clear @pending.Name?</strong>
+                <button type="button" class="small" @onclick="() => confirming = null">Close</button>
+            </div>
+
+            <div class="modal-body" style="padding-top:.75rem">
+                <p>
+                    This deletes every cached entry for this playlist &mdash;
+                    <strong>@pending.Films.ToString("N0") films</strong> and
+                    <strong>@pending.Episodes.ToString("N0") episodes</strong>.
+                </p>
+                <p class="muted">
+                    The playlist itself is kept, and so is its series list. A refresh brings the
+                    films back; a panel's episodes come back as searches ask for them. Finished
+                    downloads keep their history either way.
+                </p>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" @onclick="() => confirming = null">Cancel</button>
+                <button type="button" class="danger" disabled="@busy" @onclick="ClearSourceAsync">
+                    Clear everything
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private enum Tab { Series, Films }
+
+    /// <summary>
+    /// How many films one "select all" may pick up. A selection is held in memory and sent
+    /// back as a list of ids, and past a few thousand that is neither a deliberate choice nor
+    /// a sensible way to express it - clearing the playlist is.
+    /// </summary>
+    private const int SelectAllCap = 5000;
+
+    private List<CacheSummary> summaries = [];
+
+    private CacheSummary? selected;
+    private CacheSummary? confirming;
+
+    private Tab tab = Tab.Series;
+    private string filter = string.Empty;
+
+    private List<CachedSeries> series = [];
+    private List<CachedEntry> films = [];
+
+    /// <summary>The show whose seasons are open, and the season whose episodes are.</summary>
+    private string? expanded;
+    private int? openSeason;
+    private bool seasonIsOpen;
+
+    private List<CachedSeason> seasons = [];
+    private List<CachedEntry> episodes = [];
+
+    // Selections are held as whole records rather than ids, so ticking a series of 1,200
+    // episodes costs one entry and survives paging away from the row that made it.
+    private readonly Dictionary<string, CachedSeries> pickedSeries = [];
+    private readonly Dictionary<string, (CachedSeries Series, int? Season)> pickedSeasons = [];
+    private readonly HashSet<long> pickedEntries = [];
+
+    private int total;
+
+    /// <summary>What the total was counted for, so paging does not pay for it again.</summary>
+    private string? countedFor;
+    private int page = 1;
+    private int pageSize = 50;
+
+    private bool busy;
+    private string? message;
+    private bool messageIsError;
+
+    private int Picked => pickedSeries.Count + pickedSeasons.Count + pickedEntries.Count;
+
+    private string SelectionLabel
+    {
+        get
+        {
+            var parts = new List<string>();
+
+            if (pickedSeries.Count > 0)
+                parts.Add($"{pickedSeries.Count} whole series");
+
+            if (pickedSeasons.Count > 0)
+                parts.Add($"{pickedSeasons.Count} season{(pickedSeasons.Count == 1 ? "" : "s")}");
+
+            if (pickedEntries.Count > 0)
+                parts.Add($"{pickedEntries.Count:N0} individual entr{(pickedEntries.Count == 1 ? "y" : "ies")}");
+
+            return "Selected: " + string.Join(", ", parts) + ".";
+        }
+    }
+
+    private bool AllOnPagePicked => films.Count > 0 && films.All(x => pickedEntries.Contains(x.Id));
+
+    protected override Task OnInitializedAsync() => LoadSummariesAsync();
+
+    private async Task LoadSummariesAsync()
+    {
+        summaries = [.. await Browser.SummariesAsync()];
+
+        // A playlist open when the counts were re-read should show the new ones.
+        if (selected is not null)
+            selected = summaries.FirstOrDefault(x => x.SourceId == selected.SourceId);
+    }
+
+    private async Task OpenAsync(CacheSummary summary)
+    {
+        if (selected?.SourceId == summary.SourceId)
+        {
+            selected = null;
+            ResetView();
+            return;
+        }
+
+        selected = summary;
+        filter = string.Empty;
+        ClearSelection();
+        ResetView();
+
+        await ReloadAsync();
+    }
+
+    private async Task SwitchAsync(Tab next)
+    {
+        if (tab == next) return;
+
+        tab = next;
+        ResetView();
+        await ReloadAsync();
+    }
+
+    /// <summary>What is expanded and which page we are on; not what is selected.</summary>
+    private void ResetView()
+    {
+        expanded = null;
+        openSeason = null;
+        seasonIsOpen = false;
+        seasons = [];
+        episodes = [];
+        series = [];
+        films = [];
+        total = 0;
+        countedFor = null;
+        page = 1;
+    }
+
+    private async Task ReloadAsync()
+    {
+        if (selected is null) return;
+
+        busy = true;
+
+        try
+        {
+            var offset = (page - 1) * pageSize;
+
+            // Counting the series means aggregating every episode row in the playlist, which
+            // is about a second on a large panel. Turning a page does not change the answer,
+            // so it is only asked for when the playlist, the tab or the filter has moved.
+            var key = $"{selected.SourceId}|{tab}|{filter}";
+
+            if (countedFor != key)
+            {
+                total = tab == Tab.Series
+                    ? await Browser.CountSeriesAsync(selected.SourceId, filter)
+                    : await Browser.CountFilmsAsync(selected.SourceId, filter);
+
+                countedFor = key;
+            }
+
+            if (tab == Tab.Series)
+                series = [.. await Browser.SeriesAsync(selected.SourceId, filter, offset, pageSize)];
+            else
+                films = [.. await Browser.FilmsAsync(selected.SourceId, filter, offset, pageSize)];
+        }
+        catch (Exception ex)
+        {
+            SetMessage($"Could not read the cache: {ex.Message}", isError: true);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task ToggleExpandAsync(CachedSeries show)
+    {
+        if (expanded == show.Key)
+        {
+            expanded = null;
+            seasons = [];
+            episodes = [];
+            openSeason = null;
+            seasonIsOpen = false;
+            return;
+        }
+
+        expanded = show.Key;
+        openSeason = null;
+        seasonIsOpen = false;
+        episodes = [];
+        seasons = [.. await Browser.SeasonsAsync(show)];
+    }
+
+    private async Task ToggleSeasonOpenAsync(CachedSeries show, int? season)
+    {
+        if (seasonIsOpen && openSeason == season)
+        {
+            openSeason = null;
+            seasonIsOpen = false;
+            episodes = [];
+            return;
+        }
+
+        openSeason = season;
+        seasonIsOpen = true;
+        episodes = [.. await Browser.EpisodesAsync(show, season)];
+    }
+
+    private void ToggleSeries(CachedSeries show, ChangeEventArgs e)
+    {
+        if (e.Value is true)
+        {
+            pickedSeries[show.Key] = show;
+
+            // A whole series covers its seasons, so holding those as well would only let the
+            // count say the same thing twice.
+            foreach (var key in pickedSeasons.Where(x => x.Value.Series.Key == show.Key).Select(x => x.Key).ToList())
+                pickedSeasons.Remove(key);
+        }
+        else
+        {
+            pickedSeries.Remove(show.Key);
+        }
+    }
+
+    private bool IsSeasonPicked(CachedSeries show, int? season) =>
+        pickedSeries.ContainsKey(show.Key) || pickedSeasons.ContainsKey(SeasonKey(show, season));
+
+    private void ToggleSeason(CachedSeries show, int? season, ChangeEventArgs e)
+    {
+        // Untick the series first: keeping it would clear seasons that were just deselected.
+        if (pickedSeries.Remove(show.Key) && e.Value is false)
+        {
+            foreach (var other in seasons.Where(x => x.Season != season))
+                pickedSeasons[SeasonKey(show, other.Season)] = (show, other.Season);
+
+            return;
+        }
+
+        if (e.Value is true)
+            pickedSeasons[SeasonKey(show, season)] = (show, season);
+        else
+            pickedSeasons.Remove(SeasonKey(show, season));
+    }
+
+    private static string SeasonKey(CachedSeries show, int? season) => $"{show.Key}#{season?.ToString() ?? "-"}";
+
+    private void ToggleEntry(long id, ChangeEventArgs e)
+    {
+        if (e.Value is true) pickedEntries.Add(id);
+        else pickedEntries.Remove(id);
+    }
+
+    private void TogglePage(ChangeEventArgs e)
+    {
+        foreach (var film in films)
+        {
+            if (e.Value is true) pickedEntries.Add(film.Id);
+            else pickedEntries.Remove(film.Id);
+        }
+    }
+
+    private async Task SelectAllMatchingAsync()
+    {
+        if (selected is null) return;
+
+        var ids = await Browser.FilmIdsAsync(selected.SourceId, filter, SelectAllCap);
+
+        foreach (var id in ids) pickedEntries.Add(id);
+
+        SetMessage($"Selected {ids.Count:N0} films.", isError: false);
+    }
+
+    private void ClearSelection()
+    {
+        pickedSeries.Clear();
+        pickedSeasons.Clear();
+        pickedEntries.Clear();
+    }
+
+    private async Task ClearSelectedAsync()
+    {
+        if (Picked == 0) return;
+
+        busy = true;
+
+        try
+        {
+            var cleared = CacheCleared.Nothing;
+
+            cleared = cleared.Plus(await Browser.ClearSeriesAsync([.. pickedSeries.Values]));
+            cleared = cleared.Plus(await Browser.ClearSeasonsAsync([.. pickedSeasons.Values]));
+            cleared = cleared.Plus(await Browser.ClearEntriesAsync([.. pickedEntries]));
+
+            ClearSelection();
+            ResetView();
+
+            await LoadSummariesAsync();
+            await ReloadAsync();
+
+            SetMessage(Describe(cleared), isError: false);
+        }
+        catch (Exception ex)
+        {
+            SetMessage($"Could not clear that: {ex.Message}", isError: true);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private Task ConfirmClearSourceAsync()
+    {
+        confirming = selected;
+        return Task.CompletedTask;
+    }
+
+    private async Task ClearSourceAsync()
+    {
+        if (confirming is not { } source) return;
+
+        busy = true;
+
+        try
+        {
+            var cleared = await Browser.ClearSourceAsync(source.SourceId);
+
+            confirming = null;
+            ClearSelection();
+            ResetView();
+
+            await LoadSummariesAsync();
+            await ReloadAsync();
+
+            SetMessage(Describe(cleared), isError: false);
+        }
+        catch (Exception ex)
+        {
+            SetMessage($"Could not clear that playlist: {ex.Message}", isError: true);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string Describe(CacheCleared cleared)
+    {
+        if (cleared.Entries == 0) return "There was nothing left to clear.";
+
+        var text = $"Cleared {cleared.Entries:N0} entr{(cleared.Entries == 1 ? "y" : "ies")}.";
+
+        return cleared.SeriesReset > 0
+            ? $"{text} {cleared.SeriesReset:N0} series will be read again the next time a search asks for them."
+            : text;
+    }
+
+    private Task GoToPageAsync(int target)
+    {
+        page = target;
+        expanded = null;
+        seasons = [];
+        episodes = [];
+        return ReloadAsync();
+    }
+
+    private Task SetPageSizeAsync(int size)
+    {
+        pageSize = size;
+        page = 1;
+        return ReloadAsync();
+    }
+
+    private static string KindLabel(M3uSourceKind kind) => kind switch
+    {
+        M3uSourceKind.Xtream => "Xtream",
+        M3uSourceKind.Local => "Local",
+        _ => "Remote"
+    };
+
+    private static string SeasonLabel(int? season) =>
+        season is { } number ? $"Season {number}" : "No season";
+
+    private static string EpisodeLabel(CachedEntry entry) =>
+        entry is { Season: { } season, Episode: { } episode }
+            ? $"S{season:D2}E{episode:D2}"
+            : entry.Episode is { } only
+                ? $"E{only:D2}"
+                : "unplaced";
+
+    /// <summary>
+    /// When a panel's episode list was last read. An m3u has nothing to say here: its episodes
+    /// arrive with the playlist rather than being fetched one series at a time.
+    /// </summary>
+    private string FetchedLabel(CachedSeries show)
+    {
+        if (selected?.Kind != M3uSourceKind.Xtream) return "with the playlist";
+
+        return show.FetchedAt is { } at
+            ? at.LocalDateTime.ToString("d MMM yyyy, HH:mm")
+            : "not recorded";
+    }
+
+    private void SetMessage(string text, bool isError)
+    {
+        message = text;
+        messageIsError = isError;
+    }
+}

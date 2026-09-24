@@ -41,6 +41,7 @@ builder.Services.AddScoped<DownloadService>();
 builder.Services.AddScoped<SearchService>();
 builder.Services.AddScoped<SeriesBackfill>();
 builder.Services.AddScoped<SeasonPackService>();
+builder.Services.AddScoped<CacheBrowserService>();
 builder.Services.AddScoped<SabnzbdHandler>();
 builder.Services.AddScoped<XtreamClient>();
 builder.Services.AddScoped<M3uRefreshService>();

@@ -169,8 +169,11 @@ public class M3uRefreshService(
                             && x.SeriesId == null)
                 .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsActive, false), ct);
 
+            var finishedAt = clock.GetUtcNow();
+
             var fresh = await db.Sources.FirstAsync(x => x.Id == sourceId, ct);
-            fresh.LastRefreshCompletedAt = clock.GetUtcNow();
+            fresh.LastRefreshCompletedAt = finishedAt;
+            fresh.LastSuccessfulRefreshAt = finishedAt;
             fresh.LastRefreshStatus = RefreshStatus.Success;
             fresh.LastRefreshError = null;
             fresh.TotalEntries = total;

@@ -18,6 +18,23 @@ Add them under **Playlists**. Each one has:
 **Force update** is the *Refresh* button on each row. A newly added playlist refreshes
 immediately.
 
+## Knowing when it last worked
+
+The **Status** column carries three things:
+
+- a pill saying what the playlist is doing now &mdash; **OK**, **Refreshing**, **Failed** or
+  **Never run**
+- when it last refreshed **successfully**, which is a different question from when it last ran
+- the last run's error, when there was one
+
+The two dates are kept apart on purpose. A run that fails does not replace what is being
+served: the entries from the last good run are still there, still being searched, and how old
+*they* are is the thing actually worth knowing. A playlist that has failed every night for a
+week reads "still serving data from 7 days ago", where a single "last refreshed" date would
+just say the failure happened a minute ago.
+
+Hover the date for the exact time.
+
 ## Xtream panels
 
 A provider that hands out a username, a password and a server address is running an Xtream

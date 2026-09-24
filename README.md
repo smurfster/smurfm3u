@@ -43,6 +43,7 @@ Then work through [Setting it up](docs/setup.md) and
 | [Downloads](docs/downloads.md) | Speed limits, crash recovery and history |
 | [Proxy](docs/proxy.md) | HTTP and SOCKS proxies for playlist fetches and downloads |
 | [Notifications](docs/notifications.md) | SMTP, and which events send one |
+| [Cache](docs/cache.md) | What the playlists have cached, and clearing any of it |
 | [Logs](docs/logs.md) | The log page, and what a refresh writes to it |
 | [Development](docs/development.md) | Project layout, building, migrations and versioning |
 

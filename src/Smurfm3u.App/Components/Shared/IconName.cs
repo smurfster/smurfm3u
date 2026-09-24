@@ -11,6 +11,7 @@ public enum IconName
     Playlists,
     SearchHistory,
     Settings,
+    Cache,
     Logs,
     Sun,
     Moon,

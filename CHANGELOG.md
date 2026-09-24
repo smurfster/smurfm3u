@@ -11,6 +11,43 @@ what the UI reports is always what was built.
 
 Nothing yet.
 
+## [1.2.1] - 2026-09-24
+
+### Added
+
+- A **Cache** page, under Settings in the sidebar. It shows what each playlist has put in the
+  database &mdash; films, episodes, and for a panel how many series' episode lists have
+  actually been read out of how many are listed &mdash; and lets any of it be thrown away: a
+  whole playlist, a whole show, one season, one episode, or any number of films at once. A
+  show is held as a single selection rather than as its twelve hundred episodes, so ticking
+  one is cheap and survives paging away from the row that made it. Clearing a panel's episodes
+  also clears the series' fetch stamps, which is what makes the next search go and read them
+  again rather than leaving them gone for good. See [Cache](docs/cache.md).
+- Playlists now show **when they last refreshed successfully**, alongside what they are doing
+  now. Kept apart from when the last run *ended*, because a failed run does not replace what is
+  being served: a playlist failing nightly for a week reads "still serving data from 7 days
+  ago", where one date would only say the failure was a minute ago.
+
+### Changed
+
+- The sidebar is reordered: Dashboard, Queue, Search, Playlists, Settings, Cache, Download
+  History, Search History, Logs. Day to day first, then what is set up once, then what is
+  looked back at.
+- `Directory.Build.props` is now copied into the Docker image. It holds `<Version>`, and
+  MSBuild only finds it by walking up from the project directory, so inside the image there
+  was nothing to find and every container build fell back to the SDK default &mdash; the
+  sidebar has been reporting **v1.0.0** since the first Docker build, and 1.1.0 and 1.2.0 both
+  went unreported.
+
+### Fixed
+
+- Clearing finished downloads no longer **deletes the incomplete directory**. A grab's
+  recorded path used to name the file inside its folder and now names the folder itself; the
+  tidy-up still assumed the old shape, so for anything already finished it fell through to
+  "remove the empty parent", and the parent is the incomplete directory. It came back on the
+  next download, so nothing failed visibly, but it is a configured path and often a mount
+  point.
+
 ## [1.2.0] - 2026-09-24
 
 ### Added
@@ -196,7 +233,8 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/smurfster/smurfm3u/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/smurfster/smurfm3u/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/smurfster/smurfm3u/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/smurfster/smurfm3u/releases/tag/v1.0.0
