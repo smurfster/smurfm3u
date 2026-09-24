@@ -16,7 +16,13 @@ public sealed record SearchRequest(
     int? Episode,
     IReadOnlyCollection<int> Categories,
     int Offset,
-    int Limit);
+    int Limit,
+    /// <summary>
+    /// Which playlists to answer from. Empty means all of them, which is what the Newznab
+    /// endpoint always sends: a client has no way to name one, and would not know what to
+    /// name. The web UI does, and uses it to ask one playlist at a time.
+    /// </summary>
+    IReadOnlyCollection<int>? Sources = null);
 
 /// <summary>
 /// One offered release. <paramref name="DownloadId"/> is what a client grabs it by: a plain
@@ -71,7 +77,7 @@ public class SearchService(
         // of them in advance, so the asking is what brings them in. Only for a query naming
         // something: a browse has nothing to name, and a film search has no series to fetch.
         if (tokens.Count > 0 && request.Kind is SearchKind.Search or SearchKind.TvSearch)
-            await backfill.EnsureEpisodesAsync(tokens, ct);
+            await backfill.EnsureEpisodesAsync(tokens, request.Sources, ct);
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
@@ -101,7 +107,7 @@ public class SearchService(
         // the last refresh, so an episode added since would be invisible however often it was
         // asked for. A miss is reason enough to look again; the backfill decides how often.
         if (request.Kind is SearchKind.Search or SearchKind.TvSearch
-            && await backfill.RecheckOnMissAsync(tokens, ct) > 0)
+            && await backfill.RecheckOnMissAsync(tokens, request.Sources, ct) > 0)
         {
             items = await ordered
                 .Skip(Math.Max(0, request.Offset))
@@ -255,6 +261,14 @@ public class SearchService(
             .AsNoTracking()
             .Include(x => x.Source)
             .Where(x => x.IsActive && x.Source!.Enabled);
+
+        // Named playlists only, when any were named. A disabled one stays out either way:
+        // choosing it explicitly does not make it answer.
+        if (request.Sources is { Count: > 0 } sources)
+        {
+            var chosen = sources.ToList();
+            query = query.Where(x => chosen.Contains(x.SourceId));
+        }
 
         if (ResolveKind(request) is { } wanted)
             query = query.Where(x => x.Kind == wanted);

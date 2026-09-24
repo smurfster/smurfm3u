@@ -20,6 +20,36 @@ public class SearchQueryTests
     }
 
     [Theory]
+    [InlineData("sherlock & daughter s01", "sherlock & daughter", 1)]
+    [InlineData("sherlock & daughter season 1", "sherlock & daughter", 1)]
+    [InlineData("Top Gear S03", "Top Gear", 3)]
+    [InlineData("the wire Season 4", "the wire", 4)]
+    public void TakesASeasonOutOfTheWordsEvenWithNoEpisodeAfterIt(string query, string title, int season)
+    {
+        // The half left behind when "lanterns s01e01" was fixed. No stored title contains
+        // "s01", so left in the words it is a term that can never match and the whole query
+        // sinks - which is what a season search written this way used to do.
+        var interpreted = SearchQuery.Interpret(query);
+
+        Assert.Equal(title, interpreted.Text);
+        Assert.Equal(season, interpreted.Season);
+        Assert.Null(interpreted.Episode);
+    }
+
+    [Theory]
+    [InlineData("s01")]
+    [InlineData("Season 2")]
+    [InlineData("S4")]
+    public void RefusesToReadAQueryThatIsNothingButASeason(string query)
+    {
+        // There is no title left to search for, so the words are better used as written.
+        var interpreted = SearchQuery.Interpret(query);
+
+        Assert.Equal(query, interpreted.Text);
+        Assert.Null(interpreted.Season);
+    }
+
+    [Theory]
     [InlineData("lanterns")]
     [InlineData("Interstellar 2014")]
     [InlineData("Pacific Rim")]

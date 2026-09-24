@@ -44,6 +44,28 @@ Punctuation is already ignored on both sides, so "Mark Rober's CrunchLabs" and
 apostrophes removed and dotted acronyms welded back together, which is also how titles are
 indexed.
 
+### Seasons and episodes written into the query
+
+The *arr apps send a season and episode as their own parameters, but a query typed by hand
+carries them in the words. Those are lifted out and used to narrow the search, exactly as the
+parameters would:
+
+| Typed | Searched for |
+| --- | --- |
+| `lanterns s01e01` | "lanterns", season 1, episode 1 |
+| `sherlock & daughter s01` | "sherlock & daughter", season 1 |
+| `top gear season 3` | "top gear", season 3 |
+| `the wire 3x07` | "the wire", season 3, episode 7 |
+
+Left in the words they would be terms the title has to contain, and no title can: entries are
+stored with the season and episode stripped out and the numbers kept in their own columns. A
+query written that way used to match nothing at all, and came back only if the relaxed
+fallback rescued it &mdash; with the whole series rather than the season asked for.
+
+What a client sends explicitly always wins. A query is only reinterpreted when it carries them
+alone, and one that is nothing but a season number is left as written, since there would be no
+title left to search for.
+
 ## Release naming
 
 Playlist names are written for humans browsing an app, so they are parsed and rebuilt into
@@ -143,6 +165,22 @@ have no interest in, and for seeing how a query behaves before blaming Prowlarr 
 
 A search whose words are not all found is labelled **Closest matches**, which is the fallback
 described under Searching above.
+
+A [season pack](#season-packs) is marked with **how many episodes are in it** in place of the
+usual TV badge, because a season is offered as one release and how much of it is actually
+there is the thing worth knowing before grabbing it. The line under the release name says the
+same, alongside the show and season.
+
+## Choosing which playlists to search
+
+**Search** in the sidebar lists every enabled playlist as a tickbox. Tick none and the search
+answers from all of them, which is what the *arr apps always get: a Newznab client has no way
+to name a playlist, and no way to know what to name.
+
+Ticking one or more narrows the search to those. It narrows the fetching too &mdash; a panel
+whose answer would be filtered out is not asked in the first place.
+
+A disabled playlist is not listed, because a search would not answer from it either way.
 
 ## Paging
 

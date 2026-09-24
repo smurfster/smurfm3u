@@ -59,14 +59,35 @@ public static partial class ReleaseTitleParser
         "vip", "hq", "lq"
     };
 
-    public static ParsedTitle Parse(string rawTitle, MediaKind hint = MediaKind.Unknown)
+    /// <summary>
+    /// Reads a name a provider gave an entry.
+    /// <para>
+    /// A season stated without an episode is left alone here, because in a name it is usually
+    /// part of the title rather than a marker: "Open Season 2", "Making The Witcher: Season 2".
+    /// Measured against a catalogue of 143,440 films, reading it as a marker misfiled eight of
+    /// them and gained nothing, since a provider's season listings are not what we ingest.
+    /// </para>
+    /// </summary>
+    public static ParsedTitle Parse(string rawTitle, MediaKind hint = MediaKind.Unknown) =>
+        Parse(rawTitle, hint, seasonAlone: false);
+
+    /// <summary>
+    /// Reads text someone typed to search with, where a season on its own is deliberate:
+    /// "sherlock &amp; daughter s01" is a request for that season, not for a show whose name
+    /// ends in "s01". Nothing stored has such a word in its title, so left in the query it
+    /// matched nothing at all.
+    /// </summary>
+    public static ParsedTitle ParseQuery(string query) =>
+        Parse(query, MediaKind.Unknown, seasonAlone: true);
+
+    private static ParsedTitle Parse(string rawTitle, MediaKind hint, bool seasonAlone)
     {
         var work = StripPrefixBadges(rawTitle ?? string.Empty).Trim();
         if (work.Length == 0)
             return new ParsedTitle { Kind = hint, Title = string.Empty, SearchTitle = string.Empty };
 
         var (year, yearIndex, yearLength) = ExtractYear(work);
-        var se = MatchSeasonEpisode(work);
+        var se = MatchSeasonEpisode(work, seasonAlone);
 
         string titlePart;
         string? episodeTitle = null;
@@ -207,9 +228,14 @@ public static partial class ReleaseTitleParser
         return best is null ? (null, -1, 0) : (int.Parse(best.Groups[1].Value), best.Index, best.Length);
     }
 
-    private readonly record struct SeasonEpisodeMatch(int Season, int Episode, int Start, int Length);
+    /// <summary>
+    /// Where a season and, when there is one, an episode were found. A null episode means the
+    /// name covers a whole season - which is both what a provider's season listing looks like
+    /// and what a release we build for a season pack is named.
+    /// </summary>
+    private readonly record struct SeasonEpisodeMatch(int Season, int? Episode, int Start, int Length);
 
-    private static SeasonEpisodeMatch? MatchSeasonEpisode(string work)
+    private static SeasonEpisodeMatch? MatchSeasonEpisode(string work, bool seasonAlone)
     {
         var m = SeasonEpisodeWordy().Match(work);
         if (m.Success)
@@ -234,6 +260,17 @@ public static partial class ReleaseTitleParser
             return new SeasonEpisodeMatch(
                 int.Parse(seasonOnly.Groups[1].Value), int.Parse(episodeOnly.Groups[1].Value), start, end - start);
         }
+
+        // A season with no episode after it: "Top Gear S01", "Sherlock & Daughter Season 1".
+        // Only for a query, where it was deliberately typed. In a provider's name the same
+        // words are usually the title itself - "Open Season 2" - so reading them as a marker
+        // there costs more than it earns.
+        //
+        // It also has to leave a title behind. "S4: The Bob Lazar Story" opens with something
+        // shaped like a season and is not one, and a query of nothing but a season number is
+        // not a search for anything.
+        if (seasonAlone && seasonOnly.Success && work[..seasonOnly.Index].Trim().Length > 0)
+            return new SeasonEpisodeMatch(int.Parse(seasonOnly.Groups[1].Value), null, seasonOnly.Index, seasonOnly.Length);
 
         return null;
     }

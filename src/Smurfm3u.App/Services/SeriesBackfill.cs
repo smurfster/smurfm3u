@@ -92,7 +92,8 @@ public class SeriesBackfill(
     /// Called only when nothing was found, and only once an hour per series.
     /// </summary>
     /// <returns>How many episodes were stored.</returns>
-    public async Task<int> RecheckOnMissAsync(IReadOnlyList<string> tokens, CancellationToken ct = default)
+    public async Task<int> RecheckOnMissAsync(
+        IReadOnlyList<string> tokens, IReadOnlyCollection<int>? sources = null, CancellationToken ct = default)
     {
         if (tokens.Count == 0) return 0;
 
@@ -100,6 +101,14 @@ public class SeriesBackfill(
 
         var cutoff = clock.GetUtcNow() - RecheckAfterMiss;
         var query = db.Series.AsNoTracking().Where(x => x.IsActive);
+
+        // Asked of the playlists the search is scoped to, so choosing one does not send a
+        // request to a panel whose answer would be filtered out anyway.
+        if (sources is { Count: > 0 })
+        {
+            var chosen = sources.ToList();
+            query = query.Where(x => chosen.Contains(x.SourceId));
+        }
 
         foreach (var token in tokens)
         {
@@ -134,13 +143,22 @@ public class SeriesBackfill(
     /// if they are missing or if the panel has changed the series since they were fetched.
     /// </summary>
     /// <returns>How many episodes were stored.</returns>
-    public async Task<int> EnsureEpisodesAsync(IReadOnlyList<string> tokens, CancellationToken ct = default)
+    public async Task<int> EnsureEpisodesAsync(
+        IReadOnlyList<string> tokens, IReadOnlyCollection<int>? sources = null, CancellationToken ct = default)
     {
         if (tokens.Count == 0) return 0;
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
 
         var query = db.Series.AsNoTracking().Where(x => x.IsActive);
+
+        // Asked of the playlists the search is scoped to, so choosing one does not send a
+        // request to a panel whose answer would be filtered out anyway.
+        if (sources is { Count: > 0 })
+        {
+            var chosen = sources.ToList();
+            query = query.Where(x => chosen.Contains(x.SourceId));
+        }
 
         foreach (var token in tokens)
         {

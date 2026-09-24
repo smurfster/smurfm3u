@@ -4,6 +4,9 @@
 @inject SearchService Searcher
 @inject DownloadService Downloads
 @inject SettingsService SettingsStore
+@inject IDbContextFactory<AppDbContext> DbFactory
+@using Microsoft.EntityFrameworkCore
+@using Smurfm3u.Data
 
 <PageTitle>Search - Smurfm3u</PageTitle>
 
@@ -40,6 +43,30 @@
             <label>Episode</label>
             <input type="number" min="0" @bind="episode" placeholder="any" />
         </div>
+
+        @* Shown even with one playlist: it is where the feature lives, and a single tick
+           becomes meaningful the moment a second playlist is added. *@
+        @if (playlists.Count > 0)
+        {
+            <div class="field" style="grid-column:1 / -1">
+                <label>Playlists</label>
+                <div class="checkbox-row">
+                    @foreach (var playlist in playlists)
+                    {
+                        <label>
+                            <input type="checkbox" checked="@chosen.Contains(playlist.Id)"
+                                   @onchange="e => TogglePlaylist(playlist.Id, e)" />
+                            @playlist.Name
+                        </label>
+                    }
+                </div>
+                <div class="hint">
+                    @(chosen.Count == 0
+                        ? "Every playlist. Tick one or more to search only those."
+                        : $"Searching {chosen.Count} of {playlists.Count} playlists.")
+                </div>
+            </div>
+        }
     </div>
 
     <div class="actions">
@@ -89,10 +116,15 @@
                             <div class="muted" style="font-size:.8rem">@hit.Item.RawTitle</div>
                         </td>
                         <td>
-                            <span class="pill">@(hit.Item.Kind == MediaKind.Series ? "TV" : "Movie")</span>
+                            @* A season is offered as one release, so how many episodes are in
+                               it is the thing worth knowing before grabbing it. *@
                             @if (hit.FileCount > 1)
                             {
-                                <span class="pill">@hit.FileCount episodes</span>
+                                <span class="pill ok">@hit.FileCount episodes</span>
+                            }
+                            else
+                            {
+                                <span class="pill">@(hit.Item.Kind == MediaKind.Series ? "TV" : "Movie")</span>
                             }
                         </td>
                         <td class="muted secondary">@(hit.Item.Source?.Name ?? "-")</td>
@@ -130,6 +162,12 @@
     private int? season;
     private int? episode;
 
+    /// <summary>The playlists that can be searched, and which of them were ticked.</summary>
+    private List<PlaylistChoice> playlists = [];
+    private readonly HashSet<int> chosen = [];
+
+    private sealed record PlaylistChoice(int Id, string Name);
+
     private int total;
     private int page = 1;
     private int pageSize = 50;
@@ -140,6 +178,26 @@
 
     private string? message;
     private bool messageIsError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+
+        // Disabled playlists are left out: the search would not answer from one anyway, so
+        // offering it here would only be a tickbox that changes nothing.
+        playlists = await db.Sources
+            .AsNoTracking()
+            .Where(x => x.Enabled)
+            .OrderBy(x => x.Name)
+            .Select(x => new PlaylistChoice(x.Id, x.Name))
+            .ToListAsync();
+    }
+
+    private void TogglePlaylist(int id, ChangeEventArgs e)
+    {
+        if (e.Value is true) chosen.Add(id);
+        else chosen.Remove(id);
+    }
 
     private Task OnKeyDownAsync(KeyboardEventArgs e) =>
         e.Key == "Enter" ? RunAsync() : Task.CompletedTask;
@@ -165,7 +223,8 @@
                 episode is > 0 ? episode : null,
                 [],
                 (page - 1) * pageSize,
-                pageSize);
+                pageSize,
+                chosen);
 
             var results = await Searcher.SearchAsync(request);
 
@@ -204,6 +263,7 @@
         season = null;
         episode = null;
         kind = SearchKind.Search;
+        chosen.Clear();
         hits.Clear();
         queued.Clear();
         total = 0;

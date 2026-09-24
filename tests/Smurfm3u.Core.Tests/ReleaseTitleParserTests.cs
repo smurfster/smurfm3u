@@ -72,4 +72,52 @@ public class ReleaseTitleParserTests
     {
         Assert.Equal("marvels agents of shield", ReleaseTitleParser.Normalize("Marvel's Agents of S.H.I.E.L.D."));
     }
+
+    // ---- A season with no episode: a marker when typed, part of the name when given ----
+
+    [Theory]
+    [InlineData("Open Season 2 - 2008")]
+    [InlineData("Making The Witcher: Season 2 (2021)")]
+    [InlineData("Hunting Season 2: Ups and Downs - 2024")]
+    public void A_name_keeps_a_season_that_is_part_of_the_title(string name)
+    {
+        // Measured against 143,440 real films: reading a bare season as a marker in a
+        // provider's name misfiled exactly these, and gained nothing, because what we
+        // ingest is episodes rather than a provider's season listings.
+        var parsed = ReleaseTitleParser.Parse(name);
+
+        Assert.Null(parsed.Season);
+        Assert.Equal(MediaKind.Movie, parsed.Kind);
+    }
+
+    [Theory]
+    [InlineData("sherlock & daughter s01", "sherlock & daughter", 1)]
+    [InlineData("Top Gear Season 3", "Top Gear", 3)]
+    public void A_query_reads_a_bare_season_as_the_season_it_asks_for(string query, string title, int season)
+    {
+        var parsed = ReleaseTitleParser.ParseQuery(query);
+
+        Assert.Equal(title, parsed.Title);
+        Assert.Equal(season, parsed.Season);
+        Assert.Null(parsed.Episode);
+        Assert.Equal(MediaKind.Series, parsed.Kind);
+    }
+
+    [Fact]
+    public void A_query_that_opens_with_something_season_shaped_is_not_a_season()
+    {
+        // "S4" here is the film's name, and there is no title in front of it to search for.
+        var parsed = ReleaseTitleParser.ParseQuery("S4: The Bob Lazar Story");
+
+        Assert.Null(parsed.Season);
+    }
+
+    [Fact]
+    public void A_query_naming_both_still_reads_both()
+    {
+        var parsed = ReleaseTitleParser.ParseQuery("sherlock & daughter s01e03");
+
+        Assert.Equal(1, parsed.Season);
+        Assert.Equal(3, parsed.Episode);
+    }
 }

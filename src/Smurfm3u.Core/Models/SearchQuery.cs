@@ -23,7 +23,7 @@ public sealed record SearchQuery(string? Text, int? Season, int? Episode)
     {
         if (string.IsNullOrWhiteSpace(query)) return new SearchQuery(query, null, null);
 
-        var parsed = ReleaseTitleParser.Parse(query);
+        var parsed = ReleaseTitleParser.ParseQuery(query);
 
         // Only when it actually found one. Anything else - a year, a resolution, a release
         // group - is left in the words, where the existing matching already handles it.

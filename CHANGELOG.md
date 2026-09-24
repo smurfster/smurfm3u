@@ -11,6 +11,34 @@ what the UI reports is always what was built.
 
 Nothing yet.
 
+## [1.2.3] - 2026-09-24
+
+### Added
+
+- **Which playlists to search.** The Search page lists every enabled playlist as a tickbox;
+  tick none and it answers from all of them, as it always has. It narrows the fetching as well
+  as the matching, so a panel whose answer would be filtered out is not asked in the first
+  place. The *arr apps still get everything, because a Newznab client has no way to name a
+  playlist and no way to know what to name.
+- A season pack now shows **how many episodes are in it** in place of the usual TV badge. A
+  season is offered as one release, so how much of it is actually there is the thing worth
+  knowing before grabbing it.
+
+### Fixed
+
+- **A season written into a query no longer sinks it.** "sherlock &amp; daughter s01" and
+  "top gear season 3" were matched as if "s01" were a word the title had to contain, and no
+  title can: entries are stored with the season stripped out and the number in its own column.
+  So the search found nothing, and came back only if the relaxed fallback rescued it &mdash;
+  with the whole series rather than the season, no season pack, and nothing at all if that
+  fallback was switched off. The season is now lifted out of the words the same way
+  `s01e01` already was, which was the half of that fix left behind.
+
+  A name a provider gave an entry is deliberately left alone here: in a name the same words
+  are usually the title itself. Measured over 143,440 real films, reading a bare season as a
+  marker there misfiled eight of them &mdash; "Open Season 2", "Making The Witcher: Season 2"
+  &mdash; and gained nothing.
+
 ## [1.2.2] - 2026-09-24
 
 ### Changed
@@ -245,7 +273,8 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.2...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.3...HEAD
+[1.2.3]: https://github.com/smurfster/smurfm3u/compare/v1.2.2...v1.2.3
 [1.2.2]: https://github.com/smurfster/smurfm3u/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/smurfster/smurfm3u/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/smurfster/smurfm3u/compare/v1.1.0...v1.2.0

@@ -562,6 +562,8 @@ input[type=checkbox] {
     font-weight: 600;
     background: var(--bg-input);
     border: 1px solid var(--border);
+    /* A pill is a label, not a paragraph: broken over two lines it stops reading as one. */
+    white-space: nowrap;
 }
 
 .pill.ok { color: var(--ok); border-color: rgb(var(--ok-rgb) / 0.4); }
@@ -976,4 +978,26 @@ input[type=checkbox] {
 /* A date is never worth wrapping onto a second line. */
 .nowrap {
     white-space: nowrap;
+}
+
+/* A row of tickboxes in a form field - the playlists a search is scoped to. Wraps rather
+   than scrolls, because there is no useful order to scroll through. */
+.checkbox-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1rem;
+    padding: 0.35rem 0;
+}
+
+.checkbox-row > label {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: 0;
+    font-weight: normal;
+}
+
+.checkbox-row input[type="checkbox"] {
+    width: auto;
+    margin: 0;
 }
