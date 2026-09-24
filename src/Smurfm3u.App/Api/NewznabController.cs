@@ -171,7 +171,12 @@ public class NewznabController(
             new XElement("title", hit.ReleaseName),
             new XElement("guid", new XAttribute("isPermaLink", "true"), link),
             new XElement("link", link),
-            new XElement("comments", link),
+            // Sonarr and Radarr open this one when you click through to a release, so it goes
+            // to a page describing what the release holds rather than to the nzb itself -
+            // which downloaded a file and told you nothing. It carries no api key: the page
+            // is behind the same sign-in as the rest of the UI, and a key in here would sit
+            // in the client's database and on its screen for no reason.
+            new XElement("comments", $"{BaseUrl()}/release/{Uri.EscapeDataString(hit.DownloadId)}"),
             new XElement("pubDate", published),
             new XElement("category", hit.SubCategory),
             new XElement("description", hit.Item.RawTitle),

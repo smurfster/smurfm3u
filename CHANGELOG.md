@@ -11,6 +11,27 @@ what the UI reports is always what was built.
 
 Nothing yet.
 
+## [1.2.9] - 2026-09-24
+
+### Added
+
+- **A page describing a release**, which is what Sonarr and Radarr now open when you click
+  through to one in their search results. It answers what a single line in their grid cannot:
+  what exactly would this download? For a season pack it lists every episode behind it - the
+  numbering, so a gap is obvious at a glance, the name each file lands under, the provider's
+  episode title and category, and the size, marked where it was worked out from runtime rather
+  than declared. A **Download** button queues it from there.
+
+  A release withdrawn since the search that found it says so plainly rather than describing
+  something the playlist no longer has.
+
+### Changed
+
+- A release's info link no longer carries the **API key**. It used to point at the nzb itself,
+  so clicking it downloaded a file and told you nothing, and the key travelled into the *arr
+  app's database and onto its screen. The page it points at now is behind the same sign-in as
+  the rest of the UI and needs no key.
+
 ## [1.2.8] - 2026-09-24
 
 ### Added
@@ -350,7 +371,8 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.8...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.9...HEAD
+[1.2.9]: https://github.com/smurfster/smurfm3u/compare/v1.2.8...v1.2.9
 [1.2.8]: https://github.com/smurfster/smurfm3u/compare/v1.2.7...v1.2.8
 [1.2.7]: https://github.com/smurfster/smurfm3u/compare/v1.2.6...v1.2.7
 [1.2.6]: https://github.com/smurfster/smurfm3u/compare/v1.2.5...v1.2.6

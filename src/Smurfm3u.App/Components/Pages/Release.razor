@@ -1,0 +1,219 @@
+@page "/release/{DownloadId}"
+@using Smurfm3u.Core.Entities
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject ReleaseDetailsService Releases
+@inject DownloadService Downloads
+@inject SettingsService SettingsStore
+
+<PageTitle>@(details?.ReleaseName ?? "Release") - Smurfm3u</PageTitle>
+
+@if (loading)
+{
+    <div class="card empty">Loading...</div>
+}
+else if (details is null)
+{
+    <div class="card empty">
+        <p>That release is no longer offered.</p>
+        <p class="muted">
+            It was withdrawn from the playlist after the search that found it. A fresh search
+            will show what is available now.
+        </p>
+    </div>
+}
+else
+{
+    <div class="page-header">
+        <h1 style="margin:0">@Heading</h1>
+        <div class="actions">
+            @if (queued)
+            {
+                <span class="pill ok">Queued</span>
+            }
+            else
+            {
+                <button class="primary" disabled="@busy" @onclick="DownloadAsync">
+                    @(busy ? "Queueing..." : "Download")
+                </button>
+            }
+        </div>
+    </div>
+
+    @if (message is not null)
+    {
+        <div class="alert @(messageIsError ? "bad" : "ok")">@message</div>
+    }
+
+    <div class="card">
+        <div class="mono" style="font-size:1.02rem">@details.ReleaseName</div>
+
+        <div class="field-grid" style="margin-top:1rem">
+            <div>
+                <div class="stat-label">Kind</div>
+                <div>
+                    @if (details.IsSeasonPack)
+                    {
+                        <span class="pill ok">Season pack</span>
+                    }
+                    else
+                    {
+                        <span class="pill">@(details.Kind == MediaKind.Series ? "Episode" : "Film")</span>
+                    }
+                </div>
+            </div>
+            <div>
+                <div class="stat-label">Files</div>
+                <div>@details.Files.Count</div>
+            </div>
+            <div>
+                <div class="stat-label">Total size</div>
+                <div>@SabFormat.Size(details.TotalSizeBytes)</div>
+            </div>
+            <div>
+                <div class="stat-label">Playlist</div>
+                <div>@(details.PlaylistName ?? "-")</div>
+            </div>
+        </div>
+
+        @if (details.Files.Any(x => !x.SizeIsKnown))
+        {
+            <div class="hint" style="margin-top:.75rem">
+                Sizes marked <em>approx</em> are worked out from the runtime and quality,
+                because the provider does not declare one. The real length arrives with the
+                file, so the total here is an estimate rather than a promise.
+            </div>
+        }
+    </div>
+
+    <h2>@(details.IsSeasonPack ? "Episodes in this pack" : "What it downloads")</h2>
+
+    <div class="card" style="padding:0">
+        <table>
+            <thead>
+            <tr>
+                @if (details.IsSeasonPack)
+                {
+                    <th style="width:5rem">Episode</th>
+                }
+                <th>File</th>
+                <th class="secondary">Group</th>
+                <th class="numeric">Size</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var file in details.Files)
+            {
+                <tr class="@(file.IsActive ? null : "muted")">
+                    @if (details.IsSeasonPack)
+                    {
+                        <td class="mono nowrap">@Numbering(file)</td>
+                    }
+                    <td class="grow">
+                        <div class="mono">@file.ReleaseName.@file.Extension</div>
+                        @if (file.EpisodeTitle is { Length: > 0 } title)
+                        {
+                            <div class="muted" style="font-size:.8rem">@title</div>
+                        }
+                        @if (!file.IsActive)
+                        {
+                            <span class="pill bad">Retired</span>
+                        }
+                    </td>
+                    <td class="muted secondary">@(file.GroupTitle ?? "-")</td>
+                    <td class="numeric nowrap">
+                        @SabFormat.Size(file.SizeBytes)
+                        @if (!file.SizeIsKnown)
+                        {
+                            <span class="muted" style="font-size:.75rem"> approx</span>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+
+    @if (details.IsSeasonPack)
+    {
+        <p class="muted">
+            These are the episodes held for this season right now. There is no episode count to
+            check against, so a pack is everything available rather than provably complete &mdash;
+            a gap here means the provider does not have it either. Sonarr imports the folder file
+            by file and searches again for whatever is missing.
+        </p>
+    }
+}
+
+@code {
+    /// <summary>The id a search offered this release by: an entry id, or a whole season's.</summary>
+    [Parameter] public string? DownloadId { get; set; }
+
+    private ReleaseDetails? details;
+    private bool loading = true;
+    private bool busy;
+    private bool queued;
+
+    private string? message;
+    private bool messageIsError;
+
+    private string Heading
+    {
+        get
+        {
+            if (details is null) return "Release";
+
+            var named = details.Year is { } year ? $"{details.Title} ({year})" : details.Title;
+
+            return details.IsSeasonPack ? $"{named} — season {details.Season}" : named;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        queued = false;
+        message = null;
+
+        details = await Releases.DescribeAsync(DownloadId);
+
+        loading = false;
+    }
+
+    private static string Numbering(ReleaseFileDetail file) =>
+        file is { Season: { } season, Episode: { } episode }
+            ? $"S{season:D2}E{episode:D2}"
+            : file.Episode is { } only ? $"E{only:D2}" : "-";
+
+    /// <summary>
+    /// Queues it here rather than through Sonarr. The same thing the Search page does, and
+    /// useful when you have opened this page to decide and the answer is yes.
+    /// </summary>
+    private async Task DownloadAsync()
+    {
+        if (details is null) return;
+
+        busy = true;
+
+        try
+        {
+            var settings = await SettingsStore.GetAsync();
+            var category = details.Kind == MediaKind.Series ? settings.TvCategory : settings.MovieCategory;
+
+            var download = await Downloads.EnqueueAsync(details.DownloadId, category, priority: 0, nameOverride: null);
+
+            queued = true;
+            message = $"Queued {download.Name}.";
+            messageIsError = false;
+        }
+        catch (Exception ex)
+        {
+            message = $"Could not queue that: {ex.Message}";
+            messageIsError = true;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

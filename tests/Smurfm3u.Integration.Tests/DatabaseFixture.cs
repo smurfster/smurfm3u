@@ -46,13 +46,19 @@ public sealed class DatabaseFixture : IAsyncLifetime
 
         services.AddDbContextFactory<AppDbContext>(o => o.UseNpgsql(container.GetConnectionString()));
 
+        // Mirrors the application's own registrations. Kept by hand rather than shared,
+        // because Program.cs builds a web host these tests have no use for - so a service
+        // added there has to be added here too, and a test that cannot resolve one says so
+        // plainly rather than failing in some subtler way.
         services.AddSingleton<RefreshProgress>();
         services.AddScoped<SettingsService>();
         services.AddScoped<XtreamClient>();
         services.AddScoped<SeriesBackfill>();
         services.AddScoped<SeasonPackService>();
         services.AddScoped<SearchService>();
+        services.AddScoped<SearchHistoryService>();
         services.AddScoped<CacheBrowserService>();
+        services.AddScoped<ReleaseDetailsService>();
 
         provider = services.BuildServiceProvider();
         DbFactory = provider.GetRequiredService<IDbContextFactory<AppDbContext>>();

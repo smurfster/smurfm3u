@@ -202,6 +202,31 @@ whose answer would be filtered out is not asked in the first place.
 
 A disabled playlist is not listed, because a search would not answer from it either way.
 
+## Looking at a release before taking it
+
+Every release carries a link to a page describing it, and Sonarr and Radarr open that page
+when you click through to a release in their search results. It answers the question a single
+line in their grid cannot: **what exactly would this download?**
+
+For a film or an episode that is one file and little more than its row restated. For a
+[season pack](searching.md#season-packs) it is the point &mdash; the pack arrives as one line,
+and the page lists every episode behind it:
+
+| | |
+| --- | --- |
+| **Episode** | `S01E03`, so a gap in the numbering is obvious at a glance |
+| **File** | the name it lands under, with the provider's episode title beneath |
+| **Group** | the provider's category |
+| **Size** | marked **approx** where it was worked out from runtime rather than declared |
+
+A **Download** button queues it from here, the same as the Search page does.
+
+The page is behind the same sign-in as the rest of the UI, so the link carries no API key
+&mdash; which also keeps the key out of your *arr app's database and off its screen.
+
+A release withdrawn since the search that found it says so plainly rather than showing a page
+for something the playlist no longer has.
+
 ## Paging
 
 Every grid pages the same way &mdash; Dashboard, Playlists, Queue, History, Search and
