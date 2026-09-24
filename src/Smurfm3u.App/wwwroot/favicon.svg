@@ -13,15 +13,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Smurfm3u">
     <rect width="64" height="64" rx="14" fill="#4c8dff"/>
 
-    <!-- The playlist: two entries, the second short so the pair reads as a list rather than a bar chart. -->
-    <rect x="15" y="11" width="34" height="5.5" rx="2.75" fill="#fff"/>
-    <rect x="15" y="21" width="24" height="5.5" rx="2.75" fill="#fff"/>
+    <!--
+        The playlist: two entries, the second short so the pair reads as a list rather than a
+        bar chart. The gap between them is wider than it looks like it needs to be, because a
+        quarter of it is what survives at 16px - closer together they rasterise into one grey
+        smudge rather than two lines.
+    -->
+    <rect x="14" y="10" width="36" height="6" rx="3" fill="#fff"/>
+    <rect x="14" y="22" width="24" height="6" rx="3" fill="#fff"/>
 
     <!--
-        The download. The shaft starts well clear of the second bar: the round cap adds half
-        the stroke width at each end, so a gap that looks generous in the coordinates is the
-        one that merely separates them once drawn.
+        The download, drawn heavier than the bars so it still resolves as an arrow when it is
+        four pixels across. The shaft starts clear of the second bar: round caps add half the
+        stroke width at each end, so the gap that separates them once drawn is smaller than
+        the coordinates suggest.
     -->
-    <path d="M32 33 v16 M24 41 l8 8 8-8"
-          stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <path d="M32 34 v16 M23 41 l9 9 9-9"
+          stroke="#fff" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
 </svg>
