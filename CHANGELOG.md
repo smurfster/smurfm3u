@@ -9,7 +9,13 @@ what the UI reports is always what was built.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- The README now opens with **what it does and what it does not do** - the sources, search,
+  downloads and the rest in a page, and a table of the limitations worth knowing before
+  relying on it: no TVDB or IMDb ids so matching is on title text alone, metadata guessed from
+  names for an m3u, estimated sizes, an RSS feed that only holds what has been fetched, and a
+  season pack that cannot know whether it is complete.
 
 ## [1.2.4] - 2026-09-24
 
