@@ -1,0 +1,102 @@
+@using Smurfm3u.Core.Entities
+@inject DownloadService Downloads
+
+@*
+    What a grab is actually made of. A film or an episode is one file and says nothing new,
+    so only a grab carrying several is worth opening - a season pack, where which episodes
+    have arrived, which are still coming and which were left out is the whole question.
+*@
+
+@if (loading)
+{
+    <span class="muted">Loading...</span>
+}
+else if (files.Count == 0)
+{
+    <span class="muted">No files recorded for this grab.</span>
+}
+else
+{
+    <div class="grab-files">
+        @foreach (var file in files)
+        {
+            var percent = file.TotalBytes > 0
+                ? Math.Clamp((int)(file.DownloadedBytes * 100 / file.TotalBytes), 0, 100)
+                : 0;
+
+            <div class="grab-file">
+                <span class="pill @StatusClass(file)">@StatusLabel(file)</span>
+                <span class="mono episode-name" title="@file.Name">@file.Name</span>
+
+                @if (file.Status == DownloadFileStatus.Pending && file.DownloadedBytes > 0)
+                {
+                    @* Part way through: this is the one being transferred right now. *@
+                    <div class="progress" style="width:7rem;min-width:7rem">
+                        <div class="progress-bar" style="width:@(percent)%"></div>
+                        <div class="progress-text">@percent%</div>
+                    </div>
+                }
+
+                <span class="muted nowrap">@SabFormat.Size(Shown(file))</span>
+
+                @if (file.FailureMessage is { Length: > 0 } reason)
+                {
+                    <span class="muted" title="@reason">&mdash; @reason</span>
+                }
+            </div>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>The grab whose files to show.</summary>
+    [Parameter, EditorRequired] public long DownloadId { get; set; }
+
+    /// <summary>
+    /// Whether the grab is still running. A part-finished file means something different in
+    /// each case: in the queue it is the one being transferred now, in history it is one that
+    /// stopped partway and never will be.
+    /// </summary>
+    [Parameter] public bool Active { get; set; }
+
+    private List<DownloadFile> files = [];
+    private bool loading = true;
+    private long loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Reloaded when the row being shown changes, and on every refresh of the page that
+        // holds it, so a queue that is moving shows files that are moving with it.
+        loading = loadedFor != DownloadId;
+        loadedFor = DownloadId;
+
+        files = [.. await Downloads.FilesAsync(DownloadId)];
+        loading = false;
+    }
+
+    /// <summary>What the file has, or what it is expected to have before it starts.</summary>
+    private static long Shown(DownloadFile file) =>
+        file.DownloadedBytes > 0 ? file.DownloadedBytes : file.TotalBytes;
+
+    /// <summary>
+    /// Files are only marked done once they finish, so one with bytes against it and no
+    /// verdict yet was left partway. While the grab runs that is the file being transferred
+    /// now; once it has stopped, it is one that never finished.
+    /// </summary>
+    private static bool PartDone(DownloadFile file) =>
+        file.Status == DownloadFileStatus.Pending && file.DownloadedBytes > 0;
+
+    private string StatusLabel(DownloadFile file) => file.Status switch
+    {
+        DownloadFileStatus.Completed => "Done",
+        DownloadFileStatus.Skipped => "Gone",
+        _ => PartDone(file) ? Active ? "Getting" : "Partial" : "Waiting"
+    };
+
+    private string StatusClass(DownloadFile file) => file.Status switch
+    {
+        DownloadFileStatus.Completed => "ok",
+        DownloadFileStatus.Skipped => "bad",
+        _ => PartDone(file) && Active ? "busy" : ""
+    };
+}

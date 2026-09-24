@@ -56,7 +56,21 @@ else
                 var percent = total > 0 ? Math.Clamp((int)(downloaded * 100 / total), 0, 100) : 0;
 
                 <tr>
-                    <td class="mono grow">@row.Name</td>
+                    <td class="mono grow">
+                        @if (FileCount(row) > 1)
+                        {
+                            @* Only a grab carrying several files has anything to open: for a
+                               film or an episode the row already says all there is. *@
+                            <button class="link-button" @onclick="() => ToggleAsync(row.Id)">
+                                @(expanded == row.Id ? "▾" : "▸") @row.Name
+                            </button>
+                            <span class="muted" style="font-size:.8rem">@FileCount(row) episodes</span>
+                        }
+                        else
+                        {
+                            @row.Name
+                        }
+                    </td>
                     <td class="secondary">@(string.IsNullOrWhiteSpace(row.Category) ? "-" : row.Category)</td>
                     <td>
                         <span class="pill @PillClass(row.Status)">@row.Status</span>
@@ -88,6 +102,15 @@ else
                         </div>
                     </td>
                 </tr>
+
+                @if (expanded == row.Id)
+                {
+                    <tr>
+                        <td colspan="8" style="padding-top:0">
+                            <GrabFiles DownloadId="row.Id" Active="true" />
+                        </td>
+                    </tr>
+                }
             }
             </tbody>
         </table>
@@ -99,6 +122,12 @@ else
 
 @code {
     private readonly List<DownloadItem> rows = [];
+
+    /// <summary>How many files each listed grab holds, so a pack can be told from a film.</summary>
+    private IReadOnlyDictionary<long, int> fileCounts = new Dictionary<long, int>();
+
+    /// <summary>The grab whose files are open, if any.</summary>
+    private long? expanded;
     private int total;
     private int page = 1;
     private int pageSize = 50;
@@ -152,6 +181,9 @@ else
         rows.Clear();
         rows.AddRange(items);
 
+        // One small query for the page rather than every file of every grab on each tick.
+        fileCounts = await Downloads.FileCountsAsync([.. rows.Select(x => x.Id)]);
+
         // The queue drains on its own, so a page can empty under the reader without them
         // touching anything.
         if (rows.Count == 0 && page > 1)
@@ -159,6 +191,14 @@ else
             page = 1;
             await LoadAsync();
         }
+    }
+
+    private int FileCount(DownloadItem row) => fileCounts.GetValueOrDefault(row.Id, 1);
+
+    private Task ToggleAsync(long id)
+    {
+        expanded = expanded == id ? null : id;
+        return Task.CompletedTask;
     }
 
     private Task GoToPageAsync(int target)

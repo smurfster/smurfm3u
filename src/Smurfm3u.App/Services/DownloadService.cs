@@ -131,6 +131,38 @@ public class DownloadService(
         return download;
     }
 
+    /// <summary>
+    /// How many files each of these grabs holds. Asked for a page of rows at a time so the
+    /// queue, which reloads every couple of seconds, pays one small query rather than
+    /// dragging every file of every grab back with it.
+    /// </summary>
+    public async Task<IReadOnlyDictionary<long, int>> FileCountsAsync(
+        IReadOnlyCollection<long> downloadIds, CancellationToken ct = default)
+    {
+        if (downloadIds.Count == 0) return new Dictionary<long, int>();
+
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+
+        return await db.DownloadFiles
+            .AsNoTracking()
+            .Where(x => downloadIds.Contains(x.DownloadId))
+            .GroupBy(x => x.DownloadId)
+            .Select(g => new { DownloadId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.DownloadId, x => x.Count, ct);
+    }
+
+    /// <summary>The files of one grab, in the order they are transferred.</summary>
+    public async Task<IReadOnlyList<DownloadFile>> FilesAsync(long downloadId, CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+
+        return await db.DownloadFiles
+            .AsNoTracking()
+            .Where(x => x.DownloadId == downloadId)
+            .OrderBy(x => x.Position)
+            .ToListAsync(ct);
+    }
+
     public async Task<DownloadItem?> FindAsync(string nzoId, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);

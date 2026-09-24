@@ -11,6 +11,21 @@ what the UI reports is always what was built.
 
 Nothing yet.
 
+## [1.2.8] - 2026-09-24
+
+### Added
+
+- **What a season pack is actually downloading**, on both Queue and Download History. A grab
+  carrying more than one file opens from its row to show the episodes it is made of: which are
+  in the folder, which one is being transferred and how far it has got, which are still to
+  come, and which the provider no longer had and were left out, with the reason beside them.
+  A film or an episode is one file and its row already says everything, so only a pack has
+  anything to open.
+
+  A file left partway means different things in the two places, so it is labelled differently:
+  in the queue it is the one moving right now, in history it is one that stopped and never
+  finished.
+
 ## [1.2.7] - 2026-09-24
 
 ### Fixed
@@ -335,7 +350,8 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.7...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.8...HEAD
+[1.2.8]: https://github.com/smurfster/smurfm3u/compare/v1.2.7...v1.2.8
 [1.2.7]: https://github.com/smurfster/smurfm3u/compare/v1.2.6...v1.2.7
 [1.2.6]: https://github.com/smurfster/smurfm3u/compare/v1.2.5...v1.2.6
 [1.2.5]: https://github.com/smurfster/smurfm3u/compare/v1.2.4...v1.2.5

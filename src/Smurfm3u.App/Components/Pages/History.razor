@@ -49,7 +49,19 @@ else
             {
                 <tr>
                     <td class="grow">
-                        <div class="mono">@row.Name</div>
+                        @if (FileCount(row) > 1)
+                        {
+                            @* A season arrived as one grab, so which episodes are in the
+                               folder - and which were left out - is only visible here. *@
+                            <button class="link-button mono" @onclick="() => Toggle(row.Id)">
+                                @(expanded == row.Id ? "▾" : "▸") @row.Name
+                            </button>
+                            <span class="muted" style="font-size:.8rem">@FileCount(row) episodes</span>
+                        }
+                        else
+                        {
+                            <div class="mono">@row.Name</div>
+                        }
                         @if (row.FailureMessage is { Length: > 0 })
                         {
                             <div class="muted" style="font-size:.8rem">@row.FailureMessage</div>
@@ -73,6 +85,15 @@ else
                         </div>
                     </td>
                 </tr>
+
+                @if (expanded == row.Id)
+                {
+                    <tr>
+                        <td colspan="6" style="padding-top:0">
+                            <GrabFiles DownloadId="row.Id" Active="row.IsActive" />
+                        </td>
+                    </tr>
+                }
             }
             </tbody>
         </table>
@@ -84,6 +105,12 @@ else
 
 @code {
     private readonly List<DownloadItem> rows = [];
+
+    /// <summary>How many files each listed grab holds, so a pack can be told from a film.</summary>
+    private IReadOnlyDictionary<long, int> fileCounts = new Dictionary<long, int>();
+
+    /// <summary>The grab whose files are open, if any.</summary>
+    private long? expanded;
     private string statusFilter = string.Empty;
     private int total;
     private int page = 1;
@@ -123,6 +150,9 @@ else
         rows.Clear();
         rows.AddRange(items);
 
+        fileCounts = await Downloads.FileCountsAsync([.. rows.Select(x => x.Id)]);
+        expanded = null;
+
         // Clearing the last page would otherwise leave the reader on an empty one.
         if (rows.Count == 0 && page > 1)
         {
@@ -130,6 +160,10 @@ else
             await LoadAsync();
         }
     }
+
+    private int FileCount(DownloadItem row) => fileCounts.GetValueOrDefault(row.Id, 1);
+
+    private void Toggle(long id) => expanded = expanded == id ? null : id;
 
     private Task GoToPageAsync(int target)
     {

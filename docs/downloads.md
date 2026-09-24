@@ -28,6 +28,25 @@ what it got and its history row says how many were missing, because the *arr app
 folder file by file and will re-search whatever is not in it. A grab where nothing at all was
 still available fails, which is the answer the client needs in order to look elsewhere.
 
+## Seeing inside a grab
+
+A grab carrying more than one file &mdash; a [season pack](searching.md#season-packs) &mdash;
+can be opened from its row on **Queue** or **Download History** to see the episodes it is
+made of:
+
+| | |
+| --- | --- |
+| **Done** | transferred and in the folder |
+| **Getting** | the one being transferred now, with its own progress |
+| **Waiting** | not started; the size shown is what it is expected to be |
+| **Partial** | stopped partway and never finished. Only in history &mdash; while a grab runs, the same file reads "Getting" |
+| **Gone** | the provider no longer had it, so it was left out. The reason sits beside it |
+
+Files are transferred in order, one at a time, so at most one reads **Getting**.
+
+A single episode or film is one file and its row already says everything, so only a grab with
+several is worth opening.
+
 ## Crashes and reboots
 
 Nothing has to be done by hand after a crash, a `docker kill`, or a host that loses power.
