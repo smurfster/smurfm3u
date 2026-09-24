@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject SearchHistoryService History
+@inject SettingsService SettingsStore
 
 <PageTitle>Search history - Smurfm3u</PageTitle>
 
@@ -10,14 +11,20 @@
     <div class="actions">
         <input placeholder="Filter by query" @bind="filter" @bind:event="oninput" @bind:after="ReloadAsync"
                style="width:200px" />
-        <select @bind="pruneDays" style="width:auto">
-            <option value="90">older than 90 days</option>
-            <option value="30">older than 30 days</option>
-            <option value="7">older than 7 days</option>
-            <option value="1">older than 1 day</option>
-            <option value="0">everything</option>
-        </select>
-        <button class="danger" @onclick="PruneAsync">Delete</button>
+        <button class="danger" disabled="@(busy || picked.Count == 0)" @onclick="DeleteSelectedAsync">
+            Delete selected@(picked.Count > 0 ? $" ({picked.Count})" : "")
+        </button>
+        @if (confirmingClear)
+        {
+            <button class="danger" disabled="@busy" @onclick="ClearAsync">
+                Delete all @total.ToString("N0")? Yes
+            </button>
+            <button disabled="@busy" @onclick="() => confirmingClear = false">Cancel</button>
+        }
+        else
+        {
+            <button disabled="@(busy || total == 0)" @onclick="() => confirmingClear = true">Delete all</button>
+        }
     </div>
 </div>
 
@@ -29,6 +36,9 @@
 <p class="muted">
     @total.ToString("N0") recorded searches. Prowlarr, Sonarr and Radarr appear here as they query
     the indexer, alongside anything run from the Search page.
+    @* Said here because the page has buttons that delete: without it they read as the only
+       thing keeping the table from growing, which they are not. *@
+    @RetentionNote
 </p>
 
 @if (entries.Count == 0)
@@ -41,6 +51,10 @@ else
         <table>
             <thead>
             <tr>
+                <th style="width:2.5rem">
+                    <input type="checkbox" checked="@AllOnPagePicked" @onchange="TogglePage"
+                           title="Select everything on this page" />
+                </th>
                 <th>When</th>
                 <th class="secondary">Type</th>
                 <th>Query</th>
@@ -55,7 +69,11 @@ else
             <tbody>
             @foreach (var entry in entries)
             {
-                <tr>
+                <tr class="@(picked.Contains(entry.Id) ? "row-selected" : null)">
+                    <td>
+                        <input type="checkbox" checked="@picked.Contains(entry.Id)"
+                               @onchange="e => Toggle(entry.Id, e)" />
+                    </td>
                     <td class="muted">@entry.RequestedAt.LocalDateTime.ToString("d MMM HH:mm:ss")</td>
                     <td class="secondary"><span class="pill">@Label(entry.Kind)</span></td>
                     <td>@(string.IsNullOrWhiteSpace(entry.Query) ? "(browse)" : entry.Query)</td>
@@ -86,7 +104,7 @@ else
                 @if (expanded == entry.Id)
                 {
                     <tr>
-                        <td colspan="9" class="result-cell">
+                        <td colspan="10" class="result-cell">
                             @if (results.Count == 0)
                             {
                                 <span class="muted">
@@ -134,23 +152,47 @@ else
 @code {
     private readonly List<SearchHistoryEntry> entries = [];
     private string filter = string.Empty;
-    private int pruneDays = 30;
     private int total;
     private int page = 1;
     private int pageSize = 50;
     private string? message;
+    private bool busy;
+
+    /// <summary>
+    /// What is ticked. Held across paging and filtering rather than cleared with the rows,
+    /// so a selection gathered from several pages is still there to act on.
+    /// </summary>
+    private readonly HashSet<long> picked = [];
+
+    /// <summary>Deleting everything asks once; there is no undo and no retention to soften it.</summary>
+    private bool confirmingClear;
 
     /// <summary>The one row whose results are open, and the results themselves.</summary>
     private long? expanded;
     private IReadOnlyList<RecordedResult> results = [];
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    /// <summary>How long rows keep themselves, read once so the page can say so.</summary>
+    private int retentionDays;
+
+    private string RetentionNote => retentionDays > 0
+        ? $"Anything older than {retentionDays} days is removed automatically, so this does not need "
+          + "clearing by hand."
+        : "Retention is off, so nothing here is removed automatically. Set it under "
+          + "Settings → History if you would rather it kept itself.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        retentionDays = (await SettingsStore.GetAsync()).SearchHistoryRetentionDays;
+
+        await LoadAsync();
+    }
 
     /// <summary>A changed filter or a deletion can leave the current page past the end.</summary>
     private Task ReloadAsync()
     {
         page = 1;
         message = null;
+        confirmingClear = false;
         return LoadAsync();
     }
 
@@ -198,20 +240,71 @@ else
         expanded = entry.Id;
     }
 
+    private bool AllOnPagePicked => entries.Count > 0 && entries.TrueForAll(x => picked.Contains(x.Id));
+
+    private void Toggle(long id, ChangeEventArgs e)
+    {
+        if (e.Value is true) picked.Add(id);
+        else picked.Remove(id);
+    }
+
+    private void TogglePage(ChangeEventArgs e)
+    {
+        foreach (var entry in entries)
+        {
+            if (e.Value is true) picked.Add(entry.Id);
+            else picked.Remove(entry.Id);
+        }
+    }
+
     private async Task DeleteAsync(long id)
     {
         await History.DeleteAsync(id);
+        picked.Remove(id);
 
         // Stay where we are: removing one row should not send the reader back to the start.
         await LoadAsync();
     }
 
-    private async Task PruneAsync()
+    private async Task DeleteSelectedAsync()
     {
-        var removed = await History.DeleteOlderThanAsync(pruneDays);
-        await ReloadAsync();
-        message = $"Deleted {removed:N0} entries.";
+        busy = true;
+
+        try
+        {
+            var removed = await History.DeleteAsync(picked);
+
+            picked.Clear();
+            await ReloadAsync();
+
+            message = $"Deleted {removed:N0} {Entries(removed)}.";
+        }
+        finally
+        {
+            busy = false;
+        }
     }
+
+    private async Task ClearAsync()
+    {
+        busy = true;
+
+        try
+        {
+            var removed = await History.ClearAsync();
+
+            picked.Clear();
+            await ReloadAsync();
+
+            message = $"Deleted {removed:N0} {Entries(removed)}. The history is empty.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string Entries(int count) => count == 1 ? "entry" : "entries";
 
     private static string Label(SearchKind kind) => kind switch
     {

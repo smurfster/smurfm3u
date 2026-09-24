@@ -11,6 +11,24 @@ what the UI reports is always what was built.
 
 Nothing yet.
 
+## [1.2.13] - 2026-09-25
+
+### Changed
+
+- **Search history is deleted by picking rows, not by naming a window.** Every row has a
+  tickbox, the header ticks the page, and a selection survives paging and filtering so it can
+  be gathered from several pages and removed in one go. **Delete all** asks once before it
+  goes, because there is no undo.
+
+  What it replaces was a dropdown of ages and a Delete button, defaulting to "older than 30
+  days" - the same window the retention pass already enforces every hour. The pass always got
+  there first, so the button was structurally incapable of finding anything, reported that as
+  a success in green, and read as broken.
+
+- The page **says that retention is automatic**, and what the window is. With only a delete
+  button on screen it looked like the only thing keeping the table down, which it never was.
+  Retention set to 0 says so instead, rather than quietly keeping everything.
+
 ## [1.2.12] - 2026-09-24
 
 ### Added
@@ -424,7 +442,8 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.12...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.13...HEAD
+[1.2.13]: https://github.com/smurfster/smurfm3u/compare/v1.2.12...v1.2.13
 [1.2.12]: https://github.com/smurfster/smurfm3u/compare/v1.2.11...v1.2.12
 [1.2.11]: https://github.com/smurfster/smurfm3u/compare/v1.2.10...v1.2.11
 [1.2.10]: https://github.com/smurfster/smurfm3u/compare/v1.2.9...v1.2.10

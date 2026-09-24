@@ -104,7 +104,14 @@ public class SearchHistoryService(
             .ToList();
     }
 
-    /// <summary>Deletes entries older than the given number of days. 0 clears everything.</summary>
+    /// <summary>
+    /// Deletes entries older than the given number of days. 0 clears everything.
+    /// <para>
+    /// This is what the retention pass calls on its hourly run. The page does not offer it:
+    /// a window the worker already enforces can only ever find what the worker has not got
+    /// to yet, which is nothing, and a button that reliably removes nothing reads as broken.
+    /// </para>
+    /// </summary>
     public async Task<int> DeleteOlderThanAsync(int days, CancellationToken ct = default)
     {
         await using var db = await dbFactory.CreateDbContextAsync(ct);
@@ -114,6 +121,28 @@ public class SearchHistoryService(
 
         var cutoff = clock.GetUtcNow().AddDays(-days);
         return await db.Searches.Where(x => x.RequestedAt < cutoff).ExecuteDeleteAsync(ct);
+    }
+
+    /// <summary>Deletes the named entries. Ids that name nothing are ignored.</summary>
+    public async Task<int> DeleteAsync(IReadOnlyCollection<long> ids, CancellationToken ct = default)
+    {
+        if (ids.Count == 0) return 0;
+
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+
+        // Materialised so EF parameterises a list rather than closing over the caller's set,
+        // which the page mutates while this runs.
+        var wanted = ids.ToList();
+
+        return await db.Searches.Where(x => wanted.Contains(x.Id)).ExecuteDeleteAsync(ct);
+    }
+
+    /// <summary>Empties the history.</summary>
+    public async Task<int> ClearAsync(CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+
+        return await db.Searches.ExecuteDeleteAsync(ct);
     }
 
     public async Task<bool> DeleteAsync(long id, CancellationToken ct = default)
