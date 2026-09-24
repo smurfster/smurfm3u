@@ -9,7 +9,20 @@ what the UI reports is always what was built.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- An **integration test suite**, `tests/Smurfm3u.Integration.Tests`, running against a
+  throwaway Postgres that Testcontainers starts and the real migrations set up. It covers what
+  cannot be reached without a database: which reading of a query wins, how a season is grouped
+  into a pack and resolved at grab time, which playlists answer, and what clearing the cache
+  removes. `dotnet test` runs both suites; the unit tests still need nothing but the SDK.
+
+### Fixed
+
+- `Smurfm3u.Data` now states its Entity Framework dependency outright rather than inheriting it
+  from the Design package, which is marked private and so does not reach anything referencing
+  it. The project compiled against 10.0.12 while advertising the 10.0.4 that Npgsql asks for,
+  and anything referencing it failed to compile against its own public surface.
 
 ## [1.2.3] - 2026-09-24
 

@@ -7,7 +7,8 @@
 | `src/Smurfm3u.Core` | Entities, playlist parsing, VOD classification, release naming |
 | `src/Smurfm3u.Data` | EF Core `AppDbContext` and migrations |
 | `src/Smurfm3u.App` | Web UI, the two APIs, the download engine and the schedulers |
-| `tests/Smurfm3u.Core.Tests` | Parser tests over real-world playlist name shapes |
+| `tests/Smurfm3u.Core.Tests` | Parsing, naming and query interpretation, with no dependencies |
+| `tests/Smurfm3u.Integration.Tests` | Searching, season packs and the cache, against a real Postgres |
 
 ## Working on it
 
@@ -26,6 +27,37 @@ dotnet ef migrations add <Name> -p src/Smurfm3u.Data -s src/Smurfm3u.Data
 ```
 
 They are applied automatically at startup.
+
+## Tests
+
+Two suites, both run by `dotnet test` from the root.
+
+| Project | What it covers | Needs |
+| --- | --- | --- |
+| `tests/Smurfm3u.Core.Tests` | Parsing, release naming, query interpretation, the panel's loose JSON, backoff and pacing | nothing |
+| `tests/Smurfm3u.Integration.Tests` | Searching, season packs and the cache browser, against a real database | Docker |
+
+The integration suite starts a throwaway `postgres:17-alpine` with
+[Testcontainers](https://dotnet.testcontainers.org/), applies the real migrations to it, and
+gives each test a clean set of rows. The container is started once for the whole run and
+thrown away at the end; nothing touches a database you are using.
+
+A real Postgres rather than a substitute, because what those tests are about only exists in
+Postgres: the trigram indexes the matching leans on, `ILIKE`, array columns, and the set-based
+updates and deletes. An in-memory provider would answer differently, which would make the
+tests worse than none at all.
+
+They exist for the behaviour that cannot be reached any other way &mdash; which reading of a
+query wins depends on what the catalogue holds, so `open season 2` finding a film rather than
+season 2 of a show is only demonstrable against rows. Fixtures build those rows through
+`ReleaseTitleParser`, the same way an ingest would, so a test can never pass on data nothing
+produces.
+
+If Docker is not running the integration suite fails to start. Run the unit tests alone with:
+
+```bash
+dotnet test tests/Smurfm3u.Core.Tests
+```
 
 ## Versioning
 

@@ -5,6 +5,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!--
+      Stated outright, and not only pulled in behind the Design package. Design is marked
+      private so nothing it brings reaches a project that references this one, which left this
+      assembly compiled against 10.0.12 while advertising the 10.0.4 that Npgsql asks for.
+      Anything referencing it then failed to compile against its own public surface.
+    -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.12" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="10.0.12" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.12">
       <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
       <PrivateAssets>all</PrivateAssets>

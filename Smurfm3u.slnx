@@ -6,5 +6,6 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Smurfm3u.Core.Tests/Smurfm3u.Core.Tests.csproj" />
+    <Project Path="tests/Smurfm3u.Integration.Tests/Smurfm3u.Integration.Tests.csproj" />
   </Folder>
 </Solution>
