@@ -1,7 +1,12 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-# Project files first so restore is cached independently of source changes.
+# The version lives here, and MSBuild only finds it by walking up from the project - so it
+# has to be in the image, above src/, before anything is restored or built. Without it the
+# build silently falls back to the SDK's default of 1.0.0 and the UI reports that forever.
+COPY Directory.Build.props ./
+
+# Project files next so restore is cached independently of source changes.
 COPY src/Smurfm3u.Core/Smurfm3u.Core.csproj src/Smurfm3u.Core/
 COPY src/Smurfm3u.Data/Smurfm3u.Data.csproj src/Smurfm3u.Data/
 COPY src/Smurfm3u.App/Smurfm3u.App.csproj src/Smurfm3u.App/
