@@ -17,7 +17,7 @@ Sonarr / Radarr ─send──► /api  (SABnzbd, mode=…) ──► queue ─�
 
 ## What it does
 
-**Sources**
+### Sources
 
 - **M3U playlists** from a URL or a file on a mounted volume, and **Xtream panels** read
   through their player API instead.
@@ -29,7 +29,7 @@ Sonarr / Radarr ─send──► /api  (SABnzbd, mode=…) ──► queue ─�
 - Entries that disappear are **retired rather than deleted**, so finished downloads keep
   something to point back at.
 
-**Search**
+### Search
 
 - A **Newznab indexer** Prowlarr can point at: search, tv-search and movie-search.
 - Every word must appear in the title, with a **closest-matches fallback** when none does.
@@ -38,7 +38,7 @@ Sonarr / Radarr ─send──► /api  (SABnzbd, mode=…) ──► queue ─�
   carrying its episode count.
 - Search by hand in the web UI, scoped to chosen playlists.
 
-**Downloads**
+### Downloads
 
 - A **SABnzbd download client** Sonarr and Radarr can point at.
 - Queue with pause, resume, retry and priorities; **resumes after a crash or reboot** from the
@@ -46,7 +46,7 @@ Sonarr / Radarr ─send──► /api  (SABnzbd, mode=…) ──► queue ─�
 - Speed limits: a global cap, scheduled windows, and a per-playlist cap on top.
 - Path mappings for when the *arr apps see the files somewhere else.
 
-**Running it**
+### Running it
 
 - Web UI with light and dark themes, a live **log** page, download and search **history**, and
   a **cache browser** for inspecting and clearing what each playlist has stored.
