@@ -150,6 +150,9 @@ a:hover {
 }
 
 .brand {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
     padding: 1.1rem 1.25rem;
     font-weight: 600;
     font-size: 1.05rem;
@@ -157,7 +160,15 @@ a:hover {
     border-bottom: 1px solid var(--border);
 }
 
-.brand span {
+/* Sized here rather than left to the file, so a slow load does not shift the row as it arrives. */
+.brand img {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+/* Scoped to the inner span: the outer one only holds the words together beside the icon. */
+.brand-name > span {
     color: var(--accent);
 }
 

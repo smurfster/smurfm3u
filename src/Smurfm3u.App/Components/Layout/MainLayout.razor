@@ -5,7 +5,15 @@
     <Authorized>
         <div class="shell">
             <nav class="sidebar">
-                <div class="brand">Smurf<span>m3u</span></div>
+                @*
+                    The same file the tab icon comes from, so the mark cannot drift between
+                    the two places it appears. Decorative: the wordmark beside it already
+                    says what it is, and a screen reader repeating it helps nobody.
+                *@
+                <div class="brand">
+                    <img src="@Assets["favicon.svg"]" alt="" width="24" height="24" />
+                    <span class="brand-name">Smurf<span>m3u</span></span>
+                </div>
                 <div class="nav">
                     @* Day to day first, then what is set up once, then what is looked back at. *@
                     <NavLink href="" Match="NavLinkMatch.All"><Icon Name="IconName.Dashboard" />Dashboard</NavLink>
