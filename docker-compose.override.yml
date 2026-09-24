@@ -1,0 +1,18 @@
+# Building the app from the source beside it, rather than pulling the published image.
+#
+# Compose loads this automatically when it is next to docker-compose.yml, so a checkout of
+# this repository builds what it contains and `docker compose up -d --build` needs no extra
+# flags. Someone who only took docker-compose.yml does not have this file, and pulls.
+#
+# A build section overrides any pull policy, which is why it lives here rather than in the
+# file it overrides: in there, nobody could ever pull.
+#
+# To pull the published image from a checkout, ignore this file for that one command:
+#     docker compose -f docker-compose.yml pull
+#     docker compose -f docker-compose.yml up -d
+
+services:
+  smurfm3uapp:
+    build:
+      context: .
+      dockerfile: Dockerfile

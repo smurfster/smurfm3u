@@ -88,6 +88,10 @@ account and an API key, and writes both to the log:
 docker compose logs smurfm3uapp | grep -E "API key|generated password"
 ```
 
+A checkout builds what it contains; `docker-compose.yml` on its own pulls the released image
+from `ghcr.io/smurfster/smurfm3u`. [Setting it up](docs/setup.md) covers which you get and
+how to pin a version.
+
 Then work through [Setting it up](docs/setup.md) and
 [Connecting the *arr apps](docs/connecting-the-arrs.md), in that order.
 

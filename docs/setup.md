@@ -6,6 +6,42 @@ docker compose up -d
 
 The web UI is on <http://localhost:8090>.
 
+## Pulling, or building
+
+The app comes from `ghcr.io/smurfster/smurfm3u`, published by the release workflow every
+time a version is tagged. **Which of the two you get depends on what you took:**
+
+| What you have beside you | What `docker compose up -d` does |
+| --- | --- |
+| `docker-compose.yml` alone | Pulls the published image |
+| A checkout of this repository | Builds from the source in it |
+
+The difference is `docker-compose.override.yml`, which is only in the repository and which
+Compose loads on its own when it is there. It adds the `build` section, and a build section
+wins over any pull policy &mdash; so a checkout builds whatever it contains, which is what
+you want when you are changing it, and nothing else has to be typed.
+
+To pull the published image **from a checkout**, leave that file out for the command:
+
+```bash
+docker compose -f docker-compose.yml pull
+docker compose -f docker-compose.yml up -d
+```
+
+**Pin a version** rather than following `latest`, which moves to whatever was tagged most
+recently:
+
+```env
+SMURFM3U_TAG=1.2
+```
+
+`1.2` follows patches within that minor and stops at the next one; a full `1.2.11` never
+moves at all. Upgrading is a pull and an `up` &mdash; the database migrates itself on start,
+so there is no separate step.
+
+The image is published with the repository's own visibility. While that is private you have
+to `docker login ghcr.io` with a token carrying `read:packages` before any of this can pull.
+
 On first run the app creates its schema, an `admin` account and an API key. If you did not
 set them in the environment, both are generated and written to the log:
 

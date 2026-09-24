@@ -17,10 +17,14 @@ services:
       retries: 5
 
   smurfm3uapp:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: smurfm3u:latest
+    # Published by the release workflow on every version tag. Pin a version here, or with
+    # SMURFM3U_TAG in .env, to stop a pull moving you to a release you have not read about:
+    # latest follows whatever was tagged last.
+    #
+    # Building from source is in docker-compose.override.yml, which Compose loads on its own
+    # when it is beside this file. It is not merged in here because a build section wins over
+    # any pull policy, so this file carrying one would mean nobody could ever pull.
+    image: ghcr.io/smurfster/smurfm3u:${SMURFM3U_TAG:-latest}
     container_name: smurfm3u
     restart: unless-stopped
     depends_on:
