@@ -37,12 +37,12 @@ else
             <thead>
             <tr>
                 <th>Release</th>
-                <th>Category</th>
+                <th class="secondary">Category</th>
                 <th>Status</th>
                 <th style="width:160px">Progress</th>
-                <th class="numeric">Size</th>
+                <th class="numeric secondary">Size</th>
                 <th class="numeric">Speed</th>
-                <th class="numeric">Left</th>
+                <th class="numeric secondary">Left</th>
                 <th></th>
             </tr>
             </thead>
@@ -57,7 +57,7 @@ else
 
                 <tr>
                     <td class="mono">@row.Name</td>
-                    <td>@(string.IsNullOrWhiteSpace(row.Category) ? "-" : row.Category)</td>
+                    <td class="secondary">@(string.IsNullOrWhiteSpace(row.Category) ? "-" : row.Category)</td>
                     <td>
                         <span class="pill @PillClass(row.Status)">@row.Status</span>
                         @if (row.AttemptCount > 1)
@@ -71,9 +71,9 @@ else
                             <div class="progress-text">@percent%</div>
                         </div>
                     </td>
-                    <td class="numeric">@SabFormat.Size(total)</td>
+                    <td class="numeric secondary">@SabFormat.Size(total)</td>
                     <td class="numeric">@(rate > 0 ? SabFormat.Size(rate) + "/s" : "-")</td>
-                    <td class="numeric">@SabFormat.TimeLeft(Math.Max(0, total - downloaded), rate)</td>
+                    <td class="numeric secondary">@SabFormat.TimeLeft(Math.Max(0, total - downloaded), rate)</td>
                     <td>
                         <div class="actions">
                             @if (row.Status == DownloadStatus.Paused)

@@ -45,7 +45,7 @@ else
                 <th>Playlist</th>
                 <th class="numeric">Films</th>
                 <th class="numeric">Episodes</th>
-                <th class="numeric">Series</th>
+                <th class="numeric secondary">Series</th>
                 <th></th>
             </tr>
             </thead>
@@ -63,7 +63,7 @@ else
                     </td>
                     <td class="numeric">@summary.Films.ToString("N0")</td>
                     <td class="numeric">@summary.Episodes.ToString("N0")</td>
-                    <td class="numeric">
+                    <td class="numeric secondary">
                         @if (summary.Kind == M3uSourceKind.Xtream)
                         {
                             @* Listed is the whole catalogue; read is the part that cost a request each. *@
@@ -131,9 +131,9 @@ else
                     <tr>
                         <th style="width:2.5rem"></th>
                         <th>Series</th>
-                        <th class="numeric">Seasons</th>
+                        <th class="numeric secondary">Seasons</th>
                         <th class="numeric">Episodes</th>
-                        <th>Last read</th>
+                        <th class="secondary">Last read</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -153,9 +153,9 @@ else
                                     <span class="muted"> (@year)</span>
                                 }
                             </td>
-                            <td class="numeric">@show.Seasons</td>
+                            <td class="numeric secondary">@show.Seasons</td>
                             <td class="numeric">@show.Episodes.ToString("N0")</td>
-                            <td class="muted nowrap" title="@FetchedTitle(show)">@FetchedLabel(show)</td>
+                            <td class="muted nowrap secondary" title="@FetchedTitle(show)">@FetchedLabel(show)</td>
                         </tr>
 
                         @if (expanded == show.Key)
@@ -241,8 +241,8 @@ else
                         </th>
                         <th>Film</th>
                         <th class="numeric">Year</th>
-                        <th>Group</th>
-                        <th>First seen</th>
+                        <th class="secondary">Group</th>
+                        <th class="secondary">First seen</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -261,8 +261,8 @@ else
                                 }
                             </td>
                             <td class="numeric">@(film.Year?.ToString() ?? "-")</td>
-                            <td class="muted">@(film.GroupTitle ?? "-")</td>
-                            <td class="muted nowrap">@film.FirstSeenAt.LocalDateTime.ToString("d MMM yyyy")</td>
+                            <td class="muted secondary">@(film.GroupTitle ?? "-")</td>
+                            <td class="muted nowrap secondary">@film.FirstSeenAt.LocalDateTime.ToString("d MMM yyyy")</td>
                         </tr>
                     }
                     </tbody>

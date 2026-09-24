@@ -9,7 +9,15 @@ what the UI reports is always what was built.
 
 ## [Unreleased]
 
-Nothing yet.
+### Changed
+
+- **The tables work on a phone.** A single cell that could not shrink - a button, a release
+  name, a long URL - used to widen the whole document past the viewport, so every page scrolled
+  sideways and whatever was in the last column sat off-screen with no way to reach it. A table
+  now scrolls inside its own card, keeps a readable minimum width, and drops its least useful
+  columns below 720px: the playlist's location and tags, a download's category and size, a
+  search's playlist and date, and so on. What is left on every row is what identifies it, what
+  says its state, and what acts on it. Nothing changes above that width.
 
 ## [1.2.1] - 2026-09-24
 

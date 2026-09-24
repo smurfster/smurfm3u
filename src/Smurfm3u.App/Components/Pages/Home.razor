@@ -76,7 +76,7 @@ else
             <tr>
                 <th>Name</th>
                 <th>Status</th>
-                <th class="numeric">VOD entries</th>
+                <th class="numeric secondary">VOD entries</th>
                 <th>Last refreshed</th>
             </tr>
             </thead>
@@ -92,7 +92,7 @@ else
                         }
                     </td>
                     <td>@RefreshPill(source)</td>
-                    <td class="numeric">@source.VodEntries.ToString("N0")</td>
+                    <td class="numeric secondary">@source.VodEntries.ToString("N0")</td>
                     <td class="muted">@Relative(source.LastRefreshCompletedAt)</td>
                 </tr>
             }
@@ -118,7 +118,7 @@ else
             <tr>
                 <th>Release</th>
                 <th>Status</th>
-                <th class="numeric">Size</th>
+                <th class="numeric secondary">Size</th>
                 <th>Finished</th>
             </tr>
             </thead>
@@ -128,7 +128,7 @@ else
                 <tr>
                     <td class="mono">@download.Name</td>
                     <td>@StatusPill(download.Status)</td>
-                    <td class="numeric">@SabFormat.Size(download.DownloadedBytes)</td>
+                    <td class="numeric secondary">@SabFormat.Size(download.DownloadedBytes)</td>
                     <td class="muted">@Relative(download.CompletedAt)</td>
                 </tr>
             }

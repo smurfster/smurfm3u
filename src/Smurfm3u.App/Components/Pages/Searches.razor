@@ -41,13 +41,13 @@ else
             <thead>
             <tr>
                 <th>When</th>
-                <th>Type</th>
+                <th class="secondary">Type</th>
                 <th>Query</th>
                 <th>Episode</th>
-                <th class="numeric">Page</th>
+                <th class="numeric secondary">Page</th>
                 <th class="numeric">Results</th>
-                <th class="numeric">Took</th>
-                <th>Client</th>
+                <th class="numeric secondary">Took</th>
+                <th class="secondary">Client</th>
                 <th></th>
             </tr>
             </thead>
@@ -56,10 +56,10 @@ else
             {
                 <tr>
                     <td class="muted">@entry.RequestedAt.LocalDateTime.ToString("d MMM HH:mm:ss")</td>
-                    <td><span class="pill">@Label(entry.Kind)</span></td>
+                    <td class="secondary"><span class="pill">@Label(entry.Kind)</span></td>
                     <td>@(string.IsNullOrWhiteSpace(entry.Query) ? "(browse)" : entry.Query)</td>
                     <td class="mono">@EpisodeLabel(entry)</td>
-                    <td class="numeric mono" title="offset @entry.Offset, limit @entry.Limit">@PageLabel(entry)</td>
+                    <td class="numeric mono secondary" title="offset @entry.Offset, limit @entry.Limit">@PageLabel(entry)</td>
                     <td class="numeric">
                         <span class="@(entry.ResultCount == 0 ? "muted" : "")">@entry.ResultCount</span>
                         @if (entry.Relaxed)
@@ -67,8 +67,8 @@ else
                             <span class="pill warn" title="No entry had every word; the closest were returned">closest</span>
                         }
                     </td>
-                    <td class="numeric muted">@entry.ElapsedMs ms</td>
-                    <td class="muted" style="max-width:220px;overflow:hidden;text-overflow:ellipsis">
+                    <td class="numeric muted secondary">@entry.ElapsedMs ms</td>
+                    <td class="muted secondary" style="max-width:220px;overflow:hidden;text-overflow:ellipsis">
                         @ClientLabel(entry)
                     </td>
                     <td>

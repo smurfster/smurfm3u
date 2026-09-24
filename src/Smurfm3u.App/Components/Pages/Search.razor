@@ -74,9 +74,9 @@
                 <tr>
                     <th>Release</th>
                     <th>Kind</th>
-                    <th>Playlist</th>
+                    <th class="secondary">Playlist</th>
                     <th class="numeric">Size</th>
-                    <th>Added</th>
+                    <th class="secondary">Added</th>
                     <th></th>
                 </tr>
                 </thead>
@@ -95,9 +95,9 @@
                                 <span class="pill">@hit.FileCount episodes</span>
                             }
                         </td>
-                        <td class="muted">@(hit.Item.Source?.Name ?? "-")</td>
+                        <td class="muted secondary">@(hit.Item.Source?.Name ?? "-")</td>
                         <td class="numeric">@SabFormat.Size(hit.SizeBytes)</td>
-                        <td class="muted">@hit.Item.FirstSeenAt.LocalDateTime.ToString("d MMM yyyy")</td>
+                        <td class="muted secondary">@hit.Item.FirstSeenAt.LocalDateTime.ToString("d MMM yyyy")</td>
                         <td>
                             @if (queued.Contains(hit.DownloadId))
                             {

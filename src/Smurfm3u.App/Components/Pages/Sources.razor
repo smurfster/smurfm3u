@@ -204,8 +204,8 @@ else
             <thead>
             <tr>
                 <th>Name</th>
-                <th>Location</th>
-                <th>Tags</th>
+                <th class="secondary">Location</th>
+                <th class="secondary">Tags</th>
                 <th>Status</th>
                 <th class="numeric">VOD / total</th>
                 <th></th>
@@ -226,8 +226,8 @@ else
                             &middot; @source.MaxConcurrentDownloads concurrent
                         </div>
                     </td>
-                    <td class="mono" style="max-width:280px;overflow:hidden;text-overflow:ellipsis">@source.Location</td>
-                    <td class="mono">@TagPreview(source)</td>
+                    <td class="mono secondary" style="max-width:280px;overflow:hidden;text-overflow:ellipsis">@source.Location</td>
+                    <td class="mono secondary">@TagPreview(source)</td>
                     <td>
                         <span class="pill @StatusClass(DisplayStatus(source))">@StatusLabel(DisplayStatus(source))</span>
 

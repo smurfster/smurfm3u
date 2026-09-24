@@ -330,6 +330,48 @@ table {
     border-collapse: collapse;
 }
 
+/*
+    A table that cannot fit scrolls inside its own card rather than pushing the page
+    sideways. Without this a single unshrinkable cell - a button, a long URL - widened
+    the document past the viewport, so every page scrolled horizontally and whatever
+    was in the last column sat off-screen with no way to reach it.
+*/
+.card:has(> table) {
+    overflow-x: auto;
+}
+
+/*
+    Columns worth having on a desktop and not worth a phone's width. Marked on the
+    header and its cells together; what is left is what identifies a row, what says
+    its state, and what acts on it.
+*/
+@media (max-width: 720px) {
+    th.secondary,
+    td.secondary {
+        display: none;
+    }
+
+    /*
+        A floor rather than a fit. Squeezed into 375px the columns that cannot shrink - a
+        status pill, a date, a button - take what they need and leave the release name about
+        ten characters, wrapped into a tall thin ribbon. Given a minimum the proportions stay
+        readable and the card scrolls the difference, which is a swipe rather than a puzzle.
+    */
+    .card:has(> table) > table {
+        min-width: 32rem;
+    }
+
+    /*
+        Still needed as the safety valve: a release name is one unbroken token, so without
+        this a long one grows the table past its minimum and off the side again. Breaking
+        mid-token costs nothing in a name already written in dots.
+    */
+    td.mono,
+    td .mono {
+        overflow-wrap: anywhere;
+    }
+}
+
 th, td {
     text-align: left;
     padding: 0.55rem 0.7rem;

@@ -37,9 +37,9 @@ else
             <thead>
             <tr>
                 <th>Release</th>
-                <th>Category</th>
+                <th class="secondary">Category</th>
                 <th>Status</th>
-                <th class="numeric">Size</th>
+                <th class="numeric secondary">Size</th>
                 <th>Finished</th>
                 <th></th>
             </tr>
@@ -59,9 +59,9 @@ else
                             <div class="muted mono" style="font-size:.8rem">@row.CompletedPath</div>
                         }
                     </td>
-                    <td>@(string.IsNullOrWhiteSpace(row.Category) ? "-" : row.Category)</td>
+                    <td class="secondary">@(string.IsNullOrWhiteSpace(row.Category) ? "-" : row.Category)</td>
                     <td><span class="pill @PillClass(row.Status)">@Label(row.Status)</span></td>
-                    <td class="numeric">@SabFormat.Size(row.DownloadedBytes > 0 ? row.DownloadedBytes : row.TotalBytes)</td>
+                    <td class="numeric secondary">@SabFormat.Size(row.DownloadedBytes > 0 ? row.DownloadedBytes : row.TotalBytes)</td>
                     <td class="muted">@(row.CompletedAt?.LocalDateTime.ToString("d MMM HH:mm") ?? "-")</td>
                     <td>
                         <div class="actions">
