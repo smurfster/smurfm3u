@@ -318,10 +318,15 @@ public class DownloadService(
                 {
                     Directory.Delete(incomplete, recursive: true);
                 }
-                else
+                else if (File.Exists(incomplete))
                 {
-                    if (File.Exists(incomplete)) File.Delete(incomplete);
+                    File.Delete(incomplete);
 
+                    // Only after deleting a file that was really there, because the folder
+                    // worth tidying is the one that held it. A row whose file has already
+                    // gone points at nothing, and its parent is the incomplete directory
+                    // itself - which is configured, is often a mount point, and is not ours
+                    // to remove just because it happens to be empty.
                     var folder = Path.GetDirectoryName(incomplete);
                     if (folder is not null && Directory.Exists(folder) && !Directory.EnumerateFileSystemEntries(folder).Any())
                         Directory.Delete(folder);
