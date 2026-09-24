@@ -185,6 +185,19 @@ public class FileDownloader(
 
         var files = download.Files.OrderBy(x => x.Position).ToList();
 
+        // A file marked done whose bytes are no longer on disk is not done. Failing for good
+        // clears the work folder, and a retry after that would otherwise skip straight past
+        // the episodes that had succeeded and finish without them.
+        foreach (var settled in files.Where(x => x.Status == DownloadFileStatus.Completed))
+        {
+            if (settled.IncompletePath is { Length: > 0 } path && File.Exists(path)) continue;
+
+            settled.Status = DownloadFileStatus.Pending;
+            settled.DownloadedBytes = 0;
+        }
+
+        await db.SaveChangesAsync(CancellationToken.None);
+
         // Files settled on an earlier attempt are not fetched again; their bytes still count
         // towards what the client sees, because they are still part of this grab.
         var carried = files
@@ -231,9 +244,17 @@ public class FileDownloader(
             }
 
             // Recalculated from what the files actually declared, so a pack's estimate is
-            // replaced by real lengths as they come in rather than only at the end.
+            // replaced by real lengths as they come in rather than only at the end. Files
+            // that have gone drop out of it, so the size shown shrinks to what is coming and
+            // progress can reach the end - unless nothing is coming, in which case the row
+            // keeps the size it was queued with rather than reading as a zero-byte release.
+            var expected = files
+                .Where(x => x.Status != DownloadFileStatus.Skipped)
+                .Sum(x => x.TotalBytes);
+
             download.DownloadedBytes = carried;
-            download.TotalBytes = files.Sum(x => x.TotalBytes);
+            if (expected > 0) download.TotalBytes = expected;
+
             Interlocked.Exchange(ref handle.TotalBytes, download.TotalBytes);
             await db.SaveChangesAsync(CancellationToken.None);
         }

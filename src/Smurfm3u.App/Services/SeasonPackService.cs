@@ -28,6 +28,14 @@ public class SeasonPackService(IDbContextFactory<AppDbContext> dbFactory)
     /// </summary>
     private const int ScanLimit = 600;
 
+    /// <summary>
+    /// The largest season worth offering whole. Past this it is almost always a daily show
+    /// whose air year has been read as a season number - hundreds of episodes and several
+    /// hundred gigabytes under one name nobody meant to ask for. Those seasons are offered
+    /// episode by episode instead, which is the only honest thing to do with them.
+    /// </summary>
+    private const int MostPerPack = 200;
+
     /// <summary>Groups the episodes a season search matched into one release per show.</summary>
     public async Task<IReadOnlyList<SeasonPack>> BuildAsync(
         IQueryable<M3uItem> matched, int season, ServiceSettings settings, CancellationToken ct = default)
@@ -48,7 +56,7 @@ public class SeasonPackService(IDbContextFactory<AppDbContext> dbFactory)
         foreach (var group in episodes.GroupBy(x => (x.SourceId, x.SearchTitle, x.Year)))
         {
             var members = Distinct(group).ToList();
-            if (members.Count < floor) continue;
+            if (members.Count < floor || members.Count > MostPerPack) continue;
 
             packs.Add(Describe(
                 new SeasonPackId(group.Key.SourceId, season, group.Key.Year, group.Key.SearchTitle),
@@ -92,7 +100,11 @@ public class SeasonPackService(IDbContextFactory<AppDbContext> dbFactory)
 
         var members = Distinct(episodes).ToList();
 
-        return members.Count == 0 ? null : Describe(id, members, settings);
+        // Nothing left, or grown past what is offered whole: either way this is not a release
+        // any more, and saying so beats queueing something we would never have offered.
+        return members.Count == 0 || members.Count > MostPerPack
+            ? null
+            : Describe(id, members, settings);
     }
 
     private static SeasonPack Describe(SeasonPackId id, List<M3uItem> members, ServiceSettings settings)

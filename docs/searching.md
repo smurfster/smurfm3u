@@ -106,6 +106,12 @@ An episode withdrawn partway through a transfer is left out and the rest carry o
 still completes, and its history row says how many were missing. Only a season where nothing
 at all is still available fails outright.
 
+A season of more than 200 episodes is not offered as a pack at all. Past that it is almost
+always a daily show whose air year has been read as a season number &mdash; the index holds
+"season 2025" of a nightly news programme with 620 episodes in it &mdash; and several hundred
+gigabytes under one name nobody meant to ask for is worse than no pack. Those seasons are
+answered episode by episode.
+
 ### Turning them off
 
 **Settings &rarr; Season packs** switches them off, which returns a season search to being
