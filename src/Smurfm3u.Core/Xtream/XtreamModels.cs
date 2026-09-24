@@ -107,10 +107,53 @@ public class LooseObjectConverter<T> : JsonConverter<T?> where T : class
 /// <summary>
 /// The episode map, keyed by season number. Empty rather than null when the panel sends
 /// nothing, because every caller walks it and none of them should have to check first.
+/// <para>
+/// A non-empty array is read as a map keyed by position, because that is what it was before
+/// PHP encoded it. <c>json_encode</c> writes a list rather than an object whenever an array's
+/// keys are exactly 0, 1, 2 and so on in order &mdash; so a series whose seasons start at a
+/// season 0 of specials and run without a gap arrives as <c>[[...],[...]]</c>, while the same
+/// panel sends <c>{"1":[...],"2":[...]}</c> for the series next to it. Index is the key those
+/// seasons had, which is exactly what a panel that leaves the season off the episode needs.
+/// </para>
 /// </summary>
+/// <remarks>
+/// Treating that array as "no episodes", which is what an object-only reading does, loses the
+/// whole series silently: a search finds the series, fetches nothing, records the fetch as
+/// done, and answers with near matches forever.
+/// </remarks>
 public sealed class EpisodeMapConverter : LooseObjectConverter<Dictionary<string, List<XtreamEpisode>>>
 {
     protected override Dictionary<string, List<XtreamEpisode>> Absent => [];
+
+    public override Dictionary<string, List<XtreamEpisode>>? Read(
+        ref Utf8JsonReader reader, Type type, JsonSerializerOptions options)
+    {
+        if (reader.TokenType != JsonTokenType.StartArray) return base.Read(ref reader, type, options);
+
+        // The reader is a struct, so this is a rewind point. A panel that sends an array of
+        // something other than episode lists should cost this one field, not the series.
+        var before = reader;
+
+        try
+        {
+            var seasons = JsonSerializer.Deserialize<List<List<XtreamEpisode>?>>(ref reader, options) ?? [];
+
+            var map = new Dictionary<string, List<XtreamEpisode>>(seasons.Count);
+
+            for (var i = 0; i < seasons.Count; i++)
+                if (seasons[i] is { Count: > 0 } episodes)
+                    map[i.ToString(System.Globalization.CultureInfo.InvariantCulture)] = episodes;
+
+            return map;
+        }
+        catch (JsonException)
+        {
+            reader = before;
+            reader.Skip();
+
+            return Absent;
+        }
+    }
 }
 
 /// <summary>What the panel says about the account, used to fail a test with a real reason.</summary>

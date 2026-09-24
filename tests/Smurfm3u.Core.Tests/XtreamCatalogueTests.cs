@@ -87,6 +87,64 @@ public class XtreamCatalogueTests
         Assert.Empty(info.Episodes);
     }
 
+    [Fact]
+    public void ReadsAnEpisodeMapThePanelSentAsAnArray()
+    {
+        // PHP writes a list rather than an object when an array's keys are 0, 1, 2 in order,
+        // so a series whose seasons start at a season 0 of specials arrives like this while
+        // the series next to it, starting at season 1, arrives as an object. Read as "no
+        // episodes" the whole series disappears: Car S.O.S. had 147 of them and answered
+        // nothing.
+        var info = Parse<XtreamSeriesInfo>(
+            """
+            {"episodes":[
+              [{"id":"1","episode_num":25,"container_extension":"mkv"}],
+              [{"id":"2","episode_num":1,"container_extension":"mkv"}]
+            ]}
+            """);
+
+        Assert.Equal(2, info.Episodes.Count);
+        Assert.Equal(["0", "1"], [.. info.Episodes.Keys.Order()]);
+    }
+
+    [Fact]
+    public void KeysAnArrayOfSeasonsByThePositionPhpDroppedTheKeyFrom()
+    {
+        // The position is the key those seasons had, which is what places an episode whose
+        // own season field the panel left off.
+        var info = Parse<XtreamSeriesInfo>(
+            """{"episodes":[[{"id":"1","episode_num":25}],[{"id":"2","episode_num":1}]]}""");
+
+        var episodes = XtreamCatalogue
+            .ForSeries(Series("""{"series_id":1,"name":"Car S.O.S."}"""), info, null, Panel)
+            .ToList();
+
+        Assert.Equal([0, 1], [.. episodes.Select(x => x.Parsed!.Season)]);
+        Assert.Equal([25, 1], [.. episodes.Select(x => x.Parsed!.Episode)]);
+    }
+
+    [Fact]
+    public void StillPrefersTheSeasonOnTheEpisodeOverItsPosition()
+    {
+        var info = Parse<XtreamSeriesInfo>(
+            """{"episodes":[[{"id":"1","season":7,"episode_num":3}]]}""");
+
+        var episode = Assert.Single(
+            XtreamCatalogue.ForSeries(Series("""{"series_id":1,"name":"A Show"}"""), info, null, Panel));
+
+        Assert.Equal(7, episode.Parsed!.Season);
+    }
+
+    [Fact]
+    public void TreatsAnArrayOfSomethingOtherThanSeasonsAsNoEpisodes()
+    {
+        // Costs the field rather than the series, which is the whole point of reading panels
+        // loosely. The name survives, so the series is still listed.
+        var info = Parse<XtreamSeriesInfo>("""{"episodes":["nonsense",3]}""");
+
+        Assert.Empty(info.Episodes);
+    }
+
     // ---- Films ----
 
     [Fact]

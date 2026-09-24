@@ -11,6 +11,24 @@ what the UI reports is always what was built.
 
 Nothing yet.
 
+## [1.2.10] - 2026-09-24
+
+### Fixed
+
+- **Series whose seasons start at a season 0 answered nothing at all.** Searching Sonarr for
+  Car S.O.S. season 1 came back empty, and the series was there with 147 episodes; Top Gear
+  had 248. PHP writes a JSON list rather than an object when an array's keys are 0, 1, 2 in
+  order, so a series carrying a season 0 of specials arrives shaped as a list while the series
+  beside it, starting at season 1, arrives as an object. Only the object was read, and the
+  list was taken for an empty map.
+
+  Nothing said so. The search found the series, fetched nothing, recorded the fetch as done,
+  and fell through to near matches - which is why it looked like a matching problem rather
+  than a missing one. The position in the list is the season number PHP dropped, and is now
+  read as such.
+
+  An affected series recovers on its next search, so nothing needs re-importing.
+
 ## [1.2.9] - 2026-09-24
 
 ### Added
@@ -371,7 +389,8 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.9...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.10...HEAD
+[1.2.10]: https://github.com/smurfster/smurfm3u/compare/v1.2.9...v1.2.10
 [1.2.9]: https://github.com/smurfster/smurfm3u/compare/v1.2.8...v1.2.9
 [1.2.8]: https://github.com/smurfster/smurfm3u/compare/v1.2.7...v1.2.8
 [1.2.7]: https://github.com/smurfster/smurfm3u/compare/v1.2.6...v1.2.7
