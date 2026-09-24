@@ -27,7 +27,8 @@
 }
 
 <p class="muted">
-    @total.ToString("N0") recorded searches. Prowlarr, Sonarr and Radarr appear here as they query the indexer.
+    @total.ToString("N0") recorded searches. Prowlarr, Sonarr and Radarr appear here as they query
+    the indexer, alongside anything run from the Search page.
 </p>
 
 @if (entries.Count == 0)
@@ -242,6 +243,10 @@ else
 
     private static string ClientLabel(SearchHistoryEntry entry)
     {
+        // A search run from the Search page has no client to name; saying where it came
+        // from is more use than an empty cell or this browser's user agent.
+        if (entry.Origin == SearchOrigin.WebUi) return "Search page";
+
         var agent = entry.UserAgent ?? string.Empty;
 
         // The *arr apps send a long UA; the leading product token is the useful part.

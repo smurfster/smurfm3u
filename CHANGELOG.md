@@ -11,6 +11,20 @@ what the UI reports is always what was built.
 
 Nothing yet.
 
+## [1.2.7] - 2026-09-24
+
+### Fixed
+
+- **A search run from the Search page is recorded like any other.** It never was: only the
+  Newznab endpoint wrote history, and the page calls the search service directly, so searching
+  by hand left no trace at all - and **Results**, which is only reachable from the history,
+  could not be opened for one. The page even described itself as a log of what the *arr apps
+  ask for, which is what it had become.
+
+  Both now go through one recorder, and a new origin tells them apart: a search of your own
+  shows as "Search page" where an indexer client shows its user agent and address. Rows
+  already stored are marked as coming from the indexer, which every one of them did.
+
 ## [1.2.6] - 2026-09-24
 
 ### Fixed
@@ -321,7 +335,8 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.6...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.7...HEAD
+[1.2.7]: https://github.com/smurfster/smurfm3u/compare/v1.2.6...v1.2.7
 [1.2.6]: https://github.com/smurfster/smurfm3u/compare/v1.2.5...v1.2.6
 [1.2.5]: https://github.com/smurfster/smurfm3u/compare/v1.2.4...v1.2.5
 [1.2.4]: https://github.com/smurfster/smurfm3u/compare/v1.2.3...v1.2.4

@@ -55,3 +55,16 @@ public enum SearchKind
     MovieSearch = 2,
     Caps = 3
 }
+
+/// <summary>
+/// Where a recorded search came from. The page shows both, because "what did Sonarr ask for"
+/// and "what did I just try" are different questions and mixing them silently is confusing.
+/// </summary>
+public enum SearchOrigin
+{
+    /// <summary>A client of the Newznab endpoint: Prowlarr, Sonarr, Radarr.</summary>
+    Indexer = 0,
+
+    /// <summary>The Search page in this application.</summary>
+    WebUi = 1
+}

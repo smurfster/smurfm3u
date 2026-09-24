@@ -20,18 +20,15 @@ namespace Smurfm3u.App.Api;
 [Route("newznab/api")]
 public class NewznabController(
     SearchService search,
+    SearchHistoryService history,
     SeasonPackService seasonPacks,
     SabnzbdHandler sab,
     SettingsService settingsService,
     IDbContextFactory<AppDbContext> dbFactory,
-    TimeProvider clock,
     ILogger<NewznabController> logger) : ControllerBase
 {
     private static readonly XNamespace Atom = "http://www.w3.org/2005/Atom";
     private static readonly XNamespace Newznab = "http://www.newznab.com/DTD/2010/feeds/attributes/";
-
-    /// <summary>How many of a query's results are remembered against it.</summary>
-    private const int MaxRecordedResults = 200;
 
     [HttpGet]
     public async Task<IActionResult> Index(
@@ -265,17 +262,18 @@ public class NewznabController(
         return File(System.Text.Encoding.UTF8.GetBytes(document), "application/x-nzb", $"{pack.Name}.nzb");
     }
 
-    private async Task RecordSearchAsync(
+    /// <summary>
+    /// Records what a client of the indexer asked for. The Search page records its own through
+    /// the same service, so both land in one history and can be told apart by their origin.
+    /// </summary>
+    private Task RecordSearchAsync(
         SearchKind kind, string? q, int? season, int? ep, string? cat,
         int offset, int limit, IReadOnlyList<SearchHit> hits, bool relaxed, TimeSpan elapsed,
-        CancellationToken ct)
-    {
-        try
-        {
-            await using var db = await dbFactory.CreateDbContextAsync(ct);
-
-            db.Searches.Add(new SearchHistoryEntry
+        CancellationToken ct) =>
+        history.RecordAsync(
+            new SearchHistoryEntry
             {
+                Origin = SearchOrigin.Indexer,
                 Kind = kind,
                 Query = q,
                 Season = season,
@@ -285,25 +283,12 @@ public class NewznabController(
                 Limit = limit,
                 ResultCount = hits.Count,
                 Relaxed = relaxed,
-                // Bounded: a client asking for a huge page should not write a huge row.
-                // Packs are left out: they stand for entries rather than being one, so there
-                // is no row for the history page to link back to.
-                ResultItemIds = hits.Take(MaxRecordedResults)
-                    .Select(x => x.Item.Id).Where(x => x > 0).ToList(),
                 ElapsedMs = (int)elapsed.TotalMilliseconds,
                 ClientIp = HttpContext.Connection.RemoteIpAddress?.ToString(),
-                UserAgent = Request.Headers.UserAgent.ToString() is { Length: > 0 } ua ? ua : null,
-                RequestedAt = clock.GetUtcNow()
-            });
-
-            await db.SaveChangesAsync(ct);
-        }
-        catch (Exception ex)
-        {
-            // History is a convenience; never fail a search because we could not log it.
-            logger.LogWarning(ex, "Could not record search history");
-        }
-    }
+                UserAgent = Request.Headers.UserAgent.ToString() is { Length: > 0 } ua ? ua : null
+            },
+            hits.Select(x => x.Item.Id),
+            ct);
 
     private static IReadOnlyCollection<int> ParseCategories(string? cat)
     {

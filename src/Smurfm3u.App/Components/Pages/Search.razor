@@ -4,9 +4,12 @@
 @inject SearchService Searcher
 @inject DownloadService Downloads
 @inject SettingsService SettingsStore
+@inject SearchHistoryService History
 @inject IDbContextFactory<AppDbContext> DbFactory
 @using Microsoft.EntityFrameworkCore
 @using Smurfm3u.Data
+@using Smurfm3u.Core.Entities
+@using System.Diagnostics
 
 <PageTitle>Search - Smurfm3u</PageTitle>
 
@@ -226,13 +229,33 @@
                 pageSize,
                 chosen);
 
+            var started = Stopwatch.GetTimestamp();
             var results = await Searcher.SearchAsync(request);
+            var elapsed = Stopwatch.GetElapsedTime(started);
 
             hits.Clear();
             hits.AddRange(results.Hits);
             total = results.Total;
             relaxed = results.Relaxed;
             searched = true;
+
+            // Recorded like any other query, so what was tried here sits alongside what the
+            // *arr apps asked for - and the Results view works on it just the same.
+            await History.RecordAsync(
+                new SearchHistoryEntry
+                {
+                    Origin = SearchOrigin.WebUi,
+                    Kind = request.Kind,
+                    Query = request.Query,
+                    Season = request.Season,
+                    Episode = request.Episode,
+                    Offset = request.Offset,
+                    Limit = request.Limit,
+                    ResultCount = results.Hits.Count,
+                    Relaxed = results.Relaxed,
+                    ElapsedMs = (int)elapsed.TotalMilliseconds
+                },
+                results.Hits.Select(x => x.Item.Id));
         }
         catch (Exception ex)
         {

@@ -36,6 +36,9 @@ public class SearchHistoryEntry
     /// </summary>
     public List<long> ResultItemIds { get; set; } = [];
 
+    /// <summary>Whether a client of the indexer asked this, or someone using the Search page.</summary>
+    public SearchOrigin Origin { get; set; }
+
     public string? ClientIp { get; set; }
     public string? UserAgent { get; set; }
 
