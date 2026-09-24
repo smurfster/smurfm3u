@@ -126,7 +126,7 @@ else
             @foreach (var download in recent)
             {
                 <tr>
-                    <td class="mono">@download.Name</td>
+                    <td class="mono grow">@download.Name</td>
                     <td>@StatusPill(download.Status)</td>
                     <td class="numeric secondary">@SabFormat.Size(download.DownloadedBytes)</td>
                     <td class="muted">@Relative(download.CompletedAt)</td>

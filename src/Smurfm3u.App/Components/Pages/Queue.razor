@@ -56,7 +56,7 @@ else
                 var percent = total > 0 ? Math.Clamp((int)(downloaded * 100 / total), 0, 100) : 0;
 
                 <tr>
-                    <td class="mono">@row.Name</td>
+                    <td class="mono grow">@row.Name</td>
                     <td class="secondary">@(string.IsNullOrWhiteSpace(row.Category) ? "-" : row.Category)</td>
                     <td>
                         <span class="pill @PillClass(row.Status)">@row.Status</span>

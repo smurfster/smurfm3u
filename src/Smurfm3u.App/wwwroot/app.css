@@ -352,13 +352,17 @@ table {
     }
 
     /*
-        A floor rather than a fit. Squeezed into 375px the columns that cannot shrink - a
-        status pill, a date, a button - take what they need and leave the release name about
-        ten characters, wrapped into a tall thin ribbon. Given a minimum the proportions stay
-        readable and the card scrolls the difference, which is a swipe rather than a puzzle.
+        A floor under the column the row is actually read by. Squeezed into 375px the columns
+        that cannot shrink - a status pill, a date, a button - take what they need and leave
+        the release name about ten characters, wrapped into a tall thin ribbon. Given a
+        minimum the proportions stay readable and the card scrolls the difference, which is a
+        swipe rather than a puzzle.
+
+        Marked per column rather than as a width on every table: one blanket minimum made
+        tables that already fit - a handful of counts and a button - scroll for no reason.
     */
-    .card:has(> table) > table {
-        min-width: 32rem;
+    td.grow {
+        min-width: 16rem;
     }
 
     /*

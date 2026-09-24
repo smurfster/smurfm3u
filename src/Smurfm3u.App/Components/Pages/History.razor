@@ -48,7 +48,7 @@ else
             @foreach (var row in rows)
             {
                 <tr>
-                    <td>
+                    <td class="grow">
                         <div class="mono">@row.Name</div>
                         @if (row.FailureMessage is { Length: > 0 })
                         {
