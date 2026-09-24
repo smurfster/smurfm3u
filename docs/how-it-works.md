@@ -9,16 +9,19 @@ playlists of video files, and everything here exists to make those look like an 
 ```
 Prowlarr ──search──► /api  (Newznab)  ──► Postgres ──► parsed VOD entries
                         │
-Sonarr / Radarr ─grab──►│ t=get  ──► pseudo-.nzb (a pointer to one playlist entry)
+Sonarr / Radarr ─grab──►│ t=get  ──► pseudo-.nzb (pointers to playlist entries)
                         │
 Sonarr / Radarr ─send──► /api  (SABnzbd, mode=…) ──► queue ──► HTTP download
                                                                     │
                                                         /downloads/complete/<cat>/<release>/
 ```
 
-The `.nzb` a client grabs is not a real Usenet document. It carries the id of one playlist
-entry, and the SABnzbd endpoint reads that id back when the client posts the file to it. That
-round trip is what turns a search result into a queued download.
+The `.nzb` a client grabs is not a real Usenet document. It carries the ids of the playlist
+entries behind the release, and the SABnzbd endpoint reads them back when the client posts the
+file to it. That round trip is what turns a search result into a queued download.
+
+Usually that is one id. A [season pack](searching.md#season-packs) carries one per episode, in
+the order they should be transferred, which is how a whole season arrives as a single grab.
 
 ## Why anything is imported at all
 

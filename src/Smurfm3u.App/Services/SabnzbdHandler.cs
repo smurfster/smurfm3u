@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Smurfm3u.Core.Entities;
+using Smurfm3u.Core.Models;
 using Smurfm3u.Core.Options;
 using Smurfm3u.Data;
 
@@ -343,10 +344,17 @@ public class SabnzbdHandler(
 
         var xml = Encoding.UTF8.GetString(bytes);
 
-        if (!NzbDocument.TryParseItemId(xml, out var itemId))
+        if (!NzbDocument.TryParse(xml, out var payload))
             return new { status = false, error = "This nzb did not come from Smurfm3u" };
 
-        return await QueueItemAsync(itemId, request, ct);
+        // The document is the authority on what this grab covers: one entry, or a season's
+        // worth in the order they should be transferred.
+        return await QueueAsync(
+            () => downloads.EnqueueItemsAsync(
+                payload.ItemIds,
+                string.IsNullOrWhiteSpace(request.NzbName) ? payload.ReleaseName : request.NzbName,
+                request.Category, request.Priority ?? 0, ct),
+            ct);
     }
 
     private async Task<object> AddUrlAsync(SabRequest request, CancellationToken ct)
@@ -356,16 +364,28 @@ public class SabnzbdHandler(
             return new { status = false, error = "No url supplied" };
 
         // The url is almost always our own t=get link, so read the id straight off it.
-        if (TryReadItemIdFromUrl(url, out var itemId))
-            return await QueueItemAsync(itemId, request, ct);
+        if (TryReadIdFromUrl(url, out var downloadId))
+        {
+            return await QueueAsync(
+                () => downloads.EnqueueAsync(
+                    downloadId, request.Category, request.Priority ?? 0, request.NzbName, ct),
+                ct);
+        }
 
         try
         {
             var client = httpClientFactory.CreateClient("playlist");
             var xml = await client.GetStringAsync(url, ct);
 
-            if (NzbDocument.TryParseItemId(xml, out itemId))
-                return await QueueItemAsync(itemId, request, ct);
+            if (NzbDocument.TryParse(xml, out var payload))
+            {
+                return await QueueAsync(
+                    () => downloads.EnqueueItemsAsync(
+                        payload.ItemIds,
+                        string.IsNullOrWhiteSpace(request.NzbName) ? payload.ReleaseName : request.NzbName,
+                        request.Category, request.Priority ?? 0, ct),
+                    ct);
+            }
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
@@ -376,18 +396,16 @@ public class SabnzbdHandler(
         return new { status = false, error = "This nzb did not come from Smurfm3u" };
     }
 
-    private async Task<object> QueueItemAsync(long itemId, SabRequest request, CancellationToken ct)
+    private async Task<object> QueueAsync(Func<Task<DownloadItem>> enqueue, CancellationToken ct)
     {
         try
         {
-            var download = await downloads.EnqueueAsync(
-                itemId, request.Category, request.Priority ?? 0, request.NzbName, ct);
-
+            var download = await enqueue();
             return new { status = true, nzo_ids = new[] { download.NzoId } };
         }
         catch (InvalidOperationException ex)
         {
-            logger.LogWarning(ex, "Could not queue playlist entry {ItemId}", itemId);
+            logger.LogWarning(ex, "Could not queue that release");
             return new { status = false, error = ex.Message };
         }
     }
@@ -441,14 +459,18 @@ public class SabnzbdHandler(
             ? []
             : value.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
-    private static bool TryReadItemIdFromUrl(string url, out long itemId)
+    private static bool TryReadIdFromUrl(string url, out string downloadId)
     {
-        itemId = 0;
+        downloadId = string.Empty;
 
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return false;
 
         var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
-        return query.TryGetValue("id", out var raw) && long.TryParse(raw.ToString(), out itemId);
+
+        if (!query.TryGetValue("id", out var raw)) return false;
+
+        downloadId = raw.ToString();
+        return downloadId.Length > 0;
     }
 
     private static string StatusName(DownloadStatus status) => status switch

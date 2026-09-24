@@ -9,7 +9,27 @@ what the UI reports is always what was built.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Season packs.** A search for a season now offers the whole season as one release
+  alongside the individual episodes, which is what Sonarr's "Search Season" is asking for: a
+  release named for the season with no episode number is how it is told one covers the lot.
+  Grabbing it produces a single queue slot whose size and progress are the season's, writing
+  one file per episode into one folder for the importer to walk. A pack takes one slot against
+  the concurrency limits rather than one per episode, and a playlist's speed cap governs the
+  whole season. An episode withdrawn partway through is left out and the rest carry on, since
+  the *arr apps re-search whatever is not in the folder; only a season with nothing left
+  available fails outright. Switched on by default, with a minimum size, under
+  **Settings &rarr; Search results**.
+
+### Changed
+
+- A grab now holds one or more files instead of exactly one. A film or an episode is still a
+  single file and lands on disk exactly where it always did; existing downloads and history
+  are carried across unchanged.
+- A pack is worked out when the grab arrives rather than when the search ran, so a grab that
+  lands an hour later picks up an episode that turned up in between, and a season withdrawn in
+  the meantime is refused rather than handed over as a list of dead links.
 
 ## [1.1.0] - 2026-09-22
 

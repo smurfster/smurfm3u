@@ -38,6 +38,16 @@ public enum DownloadStatus
     Deleted = 5
 }
 
+/// <summary>How far one file within a grab has got. A grab with a single file has one of these.</summary>
+public enum DownloadFileStatus
+{
+    Pending = 0,
+    Completed = 1,
+
+    /// <summary>The provider no longer has it. The rest of the grab carries on without it.</summary>
+    Skipped = 2
+}
+
 public enum SearchKind
 {
     Search = 0,
