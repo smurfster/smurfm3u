@@ -44,6 +44,13 @@ Punctuation is already ignored on both sides, so "Mark Rober's CrunchLabs" and
 apostrophes removed and dotted acronyms welded back together, which is also how titles are
 indexed.
 
+An **ampersand is spelled out** rather than dropped, because Sonarr spells it out when it
+searches: it asks for "Sherlock and Daughter" where the provider wrote "Sherlock & Daughter".
+Both land on `sherlock and daughter`, so either spelling finds the other. Dropped, as it used
+to be, the stored title was `sherlock daughter` and "and" became a word it could never
+contain &mdash; which made every title carrying an ampersand unfindable from Sonarr, and a
+season search fall through to near matches with no [season pack](#season-packs) among them.
+
 ### Seasons and episodes written into the query
 
 The *arr apps send a season and episode as their own parameters, but a query typed by hand

@@ -110,6 +110,41 @@ public class SearchServiceTests(DatabaseFixture fixture) : IAsyncLifetime
         Assert.All(results.Hits, h => Assert.Equal(2, h.Item.Season));
     }
 
+    // ---- How Sonarr spells things ----
+
+    [Theory]
+    [InlineData("Sherlock and Daughter")]
+    [InlineData("Sherlock & Daughter")]
+    public async Task A_show_with_an_ampersand_is_found_whichever_way_it_is_spelled(string query)
+    {
+        // Sonarr sends "and" where the provider wrote "&". Dropping the ampersand made "and"
+        // a word the stored title could never contain, so a season search fell through to
+        // near matches - with no season pack among them, because packs are only built on a
+        // match that stood up. Two percent of a real catalogue was unfindable this way.
+        var id = await catalogue.PlaylistAsync("panel");
+        await catalogue.SeasonAsync(id, "Sherlock & Daughter", 2025, season: 1, episodes: 8);
+
+        var results = await SearchAsync(query, season: 1, kind: SearchKind.TvSearch);
+
+        Assert.False(results.Relaxed);
+
+        var pack = Assert.Single(results.Hits, h => h.FileCount > 1);
+        Assert.Equal(8, pack.FileCount);
+    }
+
+    [Fact]
+    public async Task An_ampersand_query_still_finds_a_show_that_spells_it_out()
+    {
+        // The same rule in reverse: a provider writing "and" and a client sending "&".
+        var id = await catalogue.PlaylistAsync("panel");
+        await catalogue.SeasonAsync(id, "Law and Order", 1990, season: 1, episodes: 5);
+
+        var results = await SearchAsync("law & order", season: 1, kind: SearchKind.TvSearch);
+
+        Assert.False(results.Relaxed);
+        Assert.Single(results.Hits, h => h.FileCount == 5);
+    }
+
     // ---- Falling back ----
 
     [Fact]

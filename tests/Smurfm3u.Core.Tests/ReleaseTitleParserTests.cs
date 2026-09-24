@@ -73,6 +73,29 @@ public class ReleaseTitleParserTests
         Assert.Equal("marvels agents of shield", ReleaseTitleParser.Normalize("Marvel's Agents of S.H.I.E.L.D."));
     }
 
+    [Theory]
+    [InlineData("Sherlock & Daughter", "sherlock and daughter")]
+    [InlineData("Sherlock and Daughter", "sherlock and daughter")]
+    [InlineData("10th & Wolf", "10th and wolf")]
+    [InlineData("Law & Order: SVU", "law and order svu")]
+    [InlineData("&Music", "and music")]
+    [InlineData("0s & 1s", "0s and 1s")]
+    public void Normalize_spells_out_an_ampersand(string title, string expected)
+    {
+        // Sonarr sends "and" where a provider wrote "&", so both have to land on one key.
+        // Dropped, the ampersand left "and" as a word the stored title could never contain,
+        // and every title carrying one was unfindable from Sonarr.
+        Assert.Equal(expected, ReleaseTitleParser.Normalize(title));
+    }
+
+    [Fact]
+    public void Normalize_puts_an_ampersand_and_its_spelling_on_the_same_key()
+    {
+        Assert.Equal(
+            ReleaseTitleParser.Normalize("Sherlock & Daughter"),
+            ReleaseTitleParser.Normalize("Sherlock and Daughter"));
+    }
+
     // ---- A season with no episode: a marker when typed, part of the name when given ----
 
     [Theory]

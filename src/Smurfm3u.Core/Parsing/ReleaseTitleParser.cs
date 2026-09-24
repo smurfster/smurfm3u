@@ -158,6 +158,12 @@ public static partial class ReleaseTitleParser
         // so acronyms are welded back together before the general pass.
         var input = DottedAcronym().Replace(value, m => m.Value.Replace(".", string.Empty));
 
+        // Spelled out rather than dropped. Sonarr sends "Sherlock and Daughter" where the
+        // provider wrote "Sherlock & Daughter", so an ampersand that simply vanished left the
+        // word "and" as a term the stored title could never contain - and every title with an
+        // ampersand in it was unfindable by the one client that matters most.
+        input = input.Replace("&", " and ");
+
         var sb = new StringBuilder(input.Length);
         var lastWasSpace = true;
 

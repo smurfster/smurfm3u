@@ -11,6 +11,23 @@ what the UI reports is always what was built.
 
 Nothing yet.
 
+## [1.2.6] - 2026-09-24
+
+### Fixed
+
+- **A title with an ampersand in it is findable from Sonarr again.** Sonarr spells an
+  ampersand out when it searches - it asks for "Sherlock and Daughter" where the provider
+  wrote "Sherlock & Daughter" - and the match key dropped the ampersand entirely, storing
+  `sherlock daughter`. That made "and" a word the stored title could never contain, so the
+  match failed and the query fell through to near matches, which never carry a season pack.
+  It looked like season packs were broken; what was broken was every title with an ampersand
+  in it. On a real catalogue that was 20,109 entries and 627 series, two percent of the whole.
+
+  The key now spells it out, so "Sherlock & Daughter" and "Sherlock and Daughter" land on the
+  same place and either spelling finds the other. Keys already stored were computed under the
+  old rule and are rewritten once at startup: a refresh re-derives most of them, but not a
+  panel's episodes, which are only written when they are fetched.
+
 ## [1.2.5] - 2026-09-24
 
 ### Added
@@ -304,7 +321,8 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.5...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.6...HEAD
+[1.2.6]: https://github.com/smurfster/smurfm3u/compare/v1.2.5...v1.2.6
 [1.2.5]: https://github.com/smurfster/smurfm3u/compare/v1.2.4...v1.2.5
 [1.2.4]: https://github.com/smurfster/smurfm3u/compare/v1.2.3...v1.2.4
 [1.2.3]: https://github.com/smurfster/smurfm3u/compare/v1.2.2...v1.2.3
