@@ -34,10 +34,14 @@ Nothing yet.
   fallback was switched off. The season is now lifted out of the words the same way
   `s01e01` already was, which was the half of that fix left behind.
 
-  A name a provider gave an entry is deliberately left alone here: in a name the same words
-  are usually the title itself. Measured over 143,440 real films, reading a bare season as a
-  marker there misfiled eight of them &mdash; "Open Season 2", "Making The Witcher: Season 2"
-  &mdash; and gained nothing.
+  The words as written are tried **first**, and this reading only gets its turn when nothing
+  contains every one of them. The two cannot be told apart by shape &mdash; `top gear season 2`
+  is a season and `open season 2` is a film, and only the catalogue knows which &mdash; so a
+  title that really does contain the words always wins.
+
+  A name a provider gave an entry is left alone here for the same reason. Measured over
+  143,440 real films, reading a bare season as a marker in a name misfiled eight of them
+  &mdash; "Open Season 2", "Making The Witcher: Season 2" &mdash; and gained nothing.
 
 ## [1.2.2] - 2026-09-24
 

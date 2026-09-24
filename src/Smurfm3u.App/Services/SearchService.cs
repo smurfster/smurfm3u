@@ -63,13 +63,41 @@ public class SearchService(
     public async Task<SearchResults> SearchAsync(SearchRequest request, CancellationToken ct = default)
     {
         var settings = await settingsService.GetAsync(ct);
-        var limit = Math.Clamp(request.Limit, 1, settings.MaxSearchResults);
 
-        // "lanterns s01e01" carries its season and episode in the words. Left there they are
-        // words the title has to contain, and it never will: titles are stored with them
-        // stripped and the numbers in their own columns. Taken out here, they narrow the
-        // search the same way the *arrs' own season and episode parameters do.
-        request = Interpret(request);
+        // What was typed, tried exactly as typed.
+        if (await AttemptAsync(request, settings, ct) is { } asWritten) return asWritten;
+
+        // Nothing. "lanterns s01e01" and "sherlock & daughter s01" carry their season and
+        // episode in the words, and left there they are terms the title has to contain, which
+        // it never can: titles are stored with them stripped and the numbers in their own
+        // columns. Read out, they narrow the search the way the *arrs' own parameters do.
+        //
+        // Second rather than first, because the two readings are not distinguishable by
+        // shape. "Open Season 2" is a film and "Top Gear Season 2" is a season, and the only
+        // thing that tells them apart is which one the catalogue actually has. Trying the
+        // words as written first means a title that really does contain them always wins, and
+        // this reading only gets its turn when the literal one found nothing at all.
+        var interpreted = Interpret(request);
+
+        if (interpreted != request && await AttemptAsync(interpreted, settings, ct) is { } reread)
+        {
+            logger.LogInformation("\"{Query}\" matched nothing; read as \"{Title}\" season {Season} episode {Episode}",
+                request.Query, interpreted.Query, interpreted.Season, interpreted.Episode);
+
+            return reread;
+        }
+
+        return await LastResortAsync(request, settings, ct);
+    }
+
+    /// <summary>
+    /// One reading of a query, matched strictly. Null when nothing has every word, which is
+    /// what lets the caller try the next reading before giving up.
+    /// </summary>
+    private async Task<SearchResults?> AttemptAsync(
+        SearchRequest request, ServiceSettings settings, CancellationToken ct)
+    {
+        var limit = Math.Clamp(request.Limit, 1, settings.MaxSearchResults);
 
         var tokens = Tokenize(request.Query);
 
@@ -128,10 +156,23 @@ public class SearchService(
             }
         }
 
-        // Every word has to appear, so one word the playlist does not use sinks the whole
-        // query. Rather than answer nothing, fall back to the closest entries we do have.
+        return null;
+    }
+
+    /// <summary>
+    /// Every word has to appear, so one word the playlist does not use sinks the whole query.
+    /// Once no reading of it has matched, answer with the closest entries rather than nothing.
+    /// </summary>
+    private async Task<SearchResults> LastResortAsync(
+        SearchRequest request, ServiceSettings settings, CancellationToken ct)
+    {
+        var tokens = Tokenize(request.Query);
+        var limit = Math.Clamp(request.Limit, 1, settings.MaxSearchResults);
+
         if (!settings.RelaxedSearchFallback || tokens.Count < 2)
             return SearchResults.Empty;
+
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
 
         var near = await NearMatchesAsync(db, request, tokens, limit, ct);
 

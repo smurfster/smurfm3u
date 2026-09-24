@@ -62,9 +62,22 @@ stored with the season and episode stripped out and the numbers kept in their ow
 query written that way used to match nothing at all, and came back only if the relaxed
 fallback rescued it &mdash; with the whole series rather than the season asked for.
 
-What a client sends explicitly always wins. A query is only reinterpreted when it carries them
-alone, and one that is nothing but a season number is left as written, since there would be no
-title left to search for.
+**The words as written are always tried first.** Only when nothing contains every one of them
+is the query read this second way. That ordering matters, because the two readings cannot be
+told apart by shape:
+
+| Typed | What it is |
+| --- | --- |
+| `top gear season 2` | season 2 of a show |
+| `open season 2` | a film called "Open Season 2" |
+
+Identical in form, and the only thing that separates them is which one the catalogue actually
+holds. Trying the literal words first means a title that really does contain them always wins,
+and the season reading only gets its turn when the literal one found nothing.
+
+What a client sends explicitly beats both. A query is only reinterpreted when it carries a
+season or episode alone, and one that is nothing but a season number is left as written, since
+there would be no title left to search for.
 
 ## Release naming
 
