@@ -11,6 +11,29 @@ what the UI reports is always what was built.
 
 Nothing yet.
 
+## [1.2.12] - 2026-09-24
+
+### Added
+
+- **A released image**, at `ghcr.io/smurfster/smurfm3u`. Tagging a version builds and
+  publishes it, as the full version, the major.minor, and `latest` - so running this no
+  longer means compiling it. `SMURFM3U_TAG` pins which one: `1.2` follows patches and stops
+  at the next minor, a full `1.2.11` never moves, and `latest` follows whatever was tagged
+  last, which is rarely what you want to find out afterwards.
+
+  The build refuses to publish when the tag and `Directory.Build.props` disagree. Nothing
+  else kept them honest, and the image would otherwise carry a number the UI does not
+  report - which happened here in the other direction, when the props file was missing from
+  the build context and every image claimed 1.0.0.
+
+### Changed
+
+- `docker-compose.yml` names the released image, and building from source moved to
+  `docker-compose.override.yml`, which Compose loads by itself when it is beside it. A
+  checkout therefore still builds what it contains and needs nothing extra typed, while
+  `docker-compose.yml` taken on its own pulls. They are in separate files because a `build`
+  section overrides any pull policy, so one file holding both can only ever build.
+
 ## [1.2.11] - 2026-09-24
 
 ### Added
@@ -401,7 +424,8 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.11...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.12...HEAD
+[1.2.12]: https://github.com/smurfster/smurfm3u/compare/v1.2.11...v1.2.12
 [1.2.11]: https://github.com/smurfster/smurfm3u/compare/v1.2.10...v1.2.11
 [1.2.10]: https://github.com/smurfster/smurfm3u/compare/v1.2.9...v1.2.10
 [1.2.9]: https://github.com/smurfster/smurfm3u/compare/v1.2.8...v1.2.9

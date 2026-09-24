@@ -29,6 +29,10 @@ jobs:
       # image is published under a number the UI does not report - which has happened here
       # before, in the other direction, when the props file was missing from the build
       # context entirely and every image claimed 1.0.0.
+      #
+      # This holds for a prerelease too: tagging v2.0.0-rc1 needs <Version>2.0.0-rc1</Version>
+      # committed, which MSBuild takes - the assembly version becomes 2.0.0.0 and the UI
+      # reports the whole thing.
       - name: Check the tag matches the version in the tree
         run: |
           tag="${GITHUB_REF_NAME#v}"
@@ -58,8 +62,10 @@ jobs:
       # patches without following a new minor, and latest is what a compose file that
       # names no version gets.
       #
-      # latest=auto rather than always: it leaves latest where it is for a prerelease, so
-      # tagging a v2.0.0-rc1 to try something does not hand it to everyone pulling latest.
+      # A prerelease gets only its own full version: the action deliberately refuses to
+      # extend {{major}}.{{minor}}, and latest=auto rather than always leaves latest where it
+      # is. So v2.0.0-rc1 publishes 2.0.0-rc1 alone, and nobody following latest or 1.2 is
+      # handed something that was tagged to try it out.
       - id: meta
         uses: docker/metadata-action@v5
         with:
