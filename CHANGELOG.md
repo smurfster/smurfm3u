@@ -9,6 +9,10 @@ what the UI reports is always what was built.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.2.0] - 2026-09-24
+
 ### Added
 
 - **Season packs.** A search for a season now offers the whole season as one release
@@ -21,15 +25,71 @@ what the UI reports is always what was built.
   the *arr apps re-search whatever is not in the folder; only a season with nothing left
   available fails outright. Switched on by default, with a minimum size, under
   **Settings &rarr; Search results**.
+- A **weekly re-read** of the episode lists nobody has searched for, oldest first and at most
+  two hundred a refresh. Everything else about a panel's episodes waits to be asked; this is
+  the part that does not, so a series nobody looks for cannot keep a withdrawn episode on
+  offer indefinitely. It replaces 1.1.0's weekly full walk, which read every series in one
+  run: the ceiling is what stops a long-neglected catalogue turning a refresh back into that,
+  and a catalogue with nothing stale pays nothing.
+- The README is now **an index over `docs/`**, with a page each for setup, the *arr apps,
+  playlists, searching, downloads, proxy, notifications, logs and development &mdash; and a
+  new **[How it works under the hood](docs/how-it-works.md)** explaining what the round trip
+  actually is, and why an m3u is read in full while a panel's episodes are fetched when asked.
 
 ### Changed
 
-- A grab now holds one or more files instead of exactly one. A film or an episode is still a
-  single file and lands on disk exactly where it always did; existing downloads and history
+- **An Xtream refresh no longer reads every episode list.** A panel gives its films in one
+  request and its series list in one, but its episodes one series at a time, and the refresh
+  was treating all three alike &mdash; pulling everything, storing everything, for a catalogue
+  almost none of which anyone ever searches for. Films and the series list are still imported
+  in bulk; episodes are now fetched the first time a search names their series, and kept from
+  then on. On a panel of 143,000 films and 30,300 series, measured:
+
+  | | Before | After |
+  | --- | --- | --- |
+  | Requests per refresh | 30,308 | **5** |
+  | Time | 2h 17m | **38s** |
+  | Downloaded | ~1.5 GB | **84 MB** |
+
+  The first search for a show waits about half a second; every search after it is answered
+  locally. The trade is that a series nobody has searched for is not in the RSS feed, because
+  a feed can only contain what has been fetched &mdash; searches are unaffected, and on a
+  catalogue approaching a million entries a feed capped at a hundred was never a useful window
+  on what was new.
+- **Episode lists at once** has a job again. It was left doing nothing when the walk it
+  governed was removed, and now paces the weekly re-read instead. A setting that does nothing
+  is a worse thing to ship than no setting at all.
+- A grab now holds **one or more files** instead of exactly one. A film or an episode is still
+  a single file and lands on disk exactly where it always did; existing downloads and history
   are carried across unchanged.
-- A pack is worked out when the grab arrives rather than when the search ran, so a grab that
-  lands an hour later picks up an episode that turned up in between, and a season withdrawn in
-  the meantime is refused rather than handed over as a list of dead links.
+- A pack is worked out **when the grab arrives** rather than when the search ran, so a grab
+  that lands an hour later picks up an episode that turned up in between, and a season
+  withdrawn in the meantime is refused rather than handed over as a list of dead links.
+
+### Fixed
+
+- **"lanterns s01e01" now finds the episode.** A query's words all have to appear in the
+  title, and "s01e01" never can: titles are stored with the season and episode stripped out
+  and the numbers kept in their own columns, so a query written that way always failed the
+  strict match and came back only because the relaxed fallback rescued it &mdash; with the
+  whole series rather than the episode asked for, and only while that fallback is switched on.
+  A season and episode written into the query are now lifted out of it and narrow the search
+  exactly as the *arrs' own parameters would. What a client sends explicitly still wins.
+- **Withdrawn episodes are retired.** Episodes arrive from a search rather than from a
+  refresh, so the refresh exempts them from its reconcile &mdash; which left nowhere for an
+  episode the panel had taken down to be noticed, and the *arrs would keep being handed it. A
+  fetch now stamps everything it stores and retires anything of that series still carrying an
+  older stamp.
+- **A download answered `404` or `410` retires the entry on the spot**, and stops being
+  retried. The provider saying outright that a file is gone is better evidence than any
+  schedule, and nothing about a 404 improves by asking again &mdash; it used to spend three
+  attempts proving the same point.
+- **A search that finds nothing asks the panel again.** The stamp deciding whether a series
+  is worth re-reading only moves when a refresh reads the series list, so between refreshes a
+  new episode was invisible however many times it was searched for &mdash; and searching
+  repeatedly for a missing episode is precisely what Sonarr does. A miss now re-reads the
+  series whatever its stamp says, bounded to once an hour per series, which makes a new
+  episode findable within the hour rather than within the day.
 
 ## [1.1.0] - 2026-09-22
 
@@ -136,6 +196,7 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/smurfster/smurfm3u/compare/v1.1.0...v1.2.0
 [1.1.0]: https://github.com/smurfster/smurfm3u/compare/v1.0.0...v1.1.0
 [1.0.0]: https://github.com/smurfster/smurfm3u/releases/tag/v1.0.0
