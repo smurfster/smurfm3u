@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    A playlist pulled down as a file, which is the whole of what Smurfm3u does.
+
+    Drawn for 16px first, because that is where a favicon actually lives: two bars and a
+    solid arrow survive being drawn six pixels tall, where a play triangle would have said
+    "media player" and nothing more. The strokes are deliberately heavier than they want to
+    be at 128px so that they still read in a browser tab.
+
+    The accent is the dark theme's, fixed rather than following the theme: a tab strip is
+    not ours to match, and the tile has to sit on both light and dark browser chrome.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Smurfm3u">
+    <rect width="64" height="64" rx="14" fill="#4c8dff"/>
+
+    <!-- The playlist: two entries, the second short so the pair reads as a list rather than a bar chart. -->
+    <rect x="15" y="11" width="34" height="5.5" rx="2.75" fill="#fff"/>
+    <rect x="15" y="21" width="24" height="5.5" rx="2.75" fill="#fff"/>
+
+    <!--
+        The download. The shaft starts well clear of the second bar: the round cap adds half
+        the stroke width at each end, so a gap that looks generous in the coordinates is the
+        one that merely separates them once drawn.
+    -->
+    <path d="M32 33 v16 M24 41 l8 8 8-8"
+          stroke="#fff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

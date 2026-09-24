@@ -11,6 +11,18 @@ what the UI reports is always what was built.
 
 Nothing yet.
 
+## [1.2.11] - 2026-09-24
+
+### Added
+
+- **An icon**, which the app has never had: a playlist pulled down as a file, in the accent
+  colour. Drawn for 16px first, because that is the size a favicon is actually seen at - a
+  play triangle would have read as "media player" and said nothing about what this does, and
+  the alternatives that looked better at 128px turned to mush in a tab strip.
+
+  SVG only. That covers current Chrome, Firefox, Edge and Safari, but anything older still
+  asks for `/favicon.ico` and gets nothing, and an iOS home-screen bookmark wants a PNG.
+
 ## [1.2.10] - 2026-09-24
 
 ### Fixed
@@ -389,7 +401,8 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.10...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.11...HEAD
+[1.2.11]: https://github.com/smurfster/smurfm3u/compare/v1.2.10...v1.2.11
 [1.2.10]: https://github.com/smurfster/smurfm3u/compare/v1.2.9...v1.2.10
 [1.2.9]: https://github.com/smurfster/smurfm3u/compare/v1.2.8...v1.2.9
 [1.2.8]: https://github.com/smurfster/smurfm3u/compare/v1.2.7...v1.2.8
