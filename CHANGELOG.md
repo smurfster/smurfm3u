@@ -9,6 +9,10 @@ what the UI reports is always what was built.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.2.5] - 2026-09-24
+
 ### Added
 
 - The README now opens with **what it does and what it does not do** - the sources, search,
@@ -300,7 +304,8 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.4...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.5...HEAD
+[1.2.5]: https://github.com/smurfster/smurfm3u/compare/v1.2.4...v1.2.5
 [1.2.4]: https://github.com/smurfster/smurfm3u/compare/v1.2.3...v1.2.4
 [1.2.3]: https://github.com/smurfster/smurfm3u/compare/v1.2.2...v1.2.3
 [1.2.2]: https://github.com/smurfster/smurfm3u/compare/v1.2.1...v1.2.2
