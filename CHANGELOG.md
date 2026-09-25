@@ -11,6 +11,16 @@ what the UI reports is always what was built.
 
 Nothing yet.
 
+## [1.2.14] - 2026-09-25
+
+### Added
+
+- The README **shows the icon** beside its title, drawn from the same file the app uses.
+- The limitations table says there is **no language detection**: every release is reported
+  as English whatever its audio. Badges such as `EN -` are stripped rather than kept, and a
+  panel describes only the first audio track of an episode - often a dub on multi-audio files
+  - and nothing at all for a film, so there is nothing reliable to report.
+
 ## [1.2.13] - 2026-09-25
 
 ### Changed
@@ -442,7 +452,8 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.13...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.14...HEAD
+[1.2.14]: https://github.com/smurfster/smurfm3u/compare/v1.2.13...v1.2.14
 [1.2.13]: https://github.com/smurfster/smurfm3u/compare/v1.2.12...v1.2.13
 [1.2.12]: https://github.com/smurfster/smurfm3u/compare/v1.2.11...v1.2.12
 [1.2.11]: https://github.com/smurfster/smurfm3u/compare/v1.2.10...v1.2.11
