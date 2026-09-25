@@ -11,6 +11,15 @@ what the UI reports is always what was built.
 
 Nothing yet.
 
+## [1.2.15] - 2026-09-25
+
+### Changed
+
+- Playlists, Settings, Cache, Download History, Search History and Logs sit under a
+  **collapsible Administration** heading in the sidebar, leaving Dashboard, Queue and Search
+  at the top. It starts open, remembers being folded away, and always opens on one of its
+  own pages so the page you are on is never hidden.
+
 ## [1.2.14] - 2026-09-25
 
 ### Added
@@ -452,7 +461,8 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.14...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.15...HEAD
+[1.2.15]: https://github.com/smurfster/smurfm3u/compare/v1.2.14...v1.2.15
 [1.2.14]: https://github.com/smurfster/smurfm3u/compare/v1.2.13...v1.2.14
 [1.2.13]: https://github.com/smurfster/smurfm3u/compare/v1.2.12...v1.2.13
 [1.2.12]: https://github.com/smurfster/smurfm3u/compare/v1.2.11...v1.2.12
