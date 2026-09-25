@@ -49,8 +49,45 @@
 
 <body>
     <Routes />
+    @*
+        Remembers whether Administration was folded away. Run straight after the markup so a
+        folded group never paints open first, and again after every enhanced navigation,
+        because that re-renders the layout with the group open. It always opens on one of its
+        own pages, so the current page is never hidden.
+    *@
+    <script>
+        function syncAdminNav() {
+            var group = document.querySelector('.nav-group');
+            if (!group) return;
+            if (group.querySelector('a.active')) {
+                group.open = true;
+                return;
+            }
+            try {
+                group.open = localStorage.getItem('smurfm3u-admin-nav') !== 'closed';
+            } catch (e) {
+                // Storage blocked: it stays as rendered, open.
+            }
+        }
+
+        // On the click rather than the toggle event, which also fires when the sync above
+        // opens it, and would then record a choice nobody made.
+        document.addEventListener('click', function (e) {
+            var summary = e.target.closest('.nav-group > summary');
+            if (!summary) return;
+            try {
+                // Still the state before the click takes effect.
+                localStorage.setItem('smurfm3u-admin-nav', summary.parentElement.open ? 'closed' : 'open');
+            } catch (e) {
+                // Not remembered, but it still folds for now.
+            }
+        });
+
+        syncAdminNav();
+    </script>
     <ReconnectModal />
     <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script>Blazor.addEventListener('enhancedload', syncAdminNav);</script>
 </body>
 
 </html>

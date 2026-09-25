@@ -15,5 +15,6 @@ public enum IconName
     Logs,
     Sun,
     Moon,
-    SignOut
+    SignOut,
+    Chevron
 }

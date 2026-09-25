@@ -208,6 +208,47 @@ a:hover {
     background: rgb(var(--accent-rgb) / 0.08);
 }
 
+/* Groups the pages below it and folds them away; it is never itself a destination. */
+.nav-group {
+    margin-top: 0.9rem;
+    border-top: 1px solid var(--border);
+}
+
+.nav-group > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.8rem 1.25rem 0.4rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    cursor: pointer;
+    list-style: none;
+    user-select: none;
+}
+
+/* Safari still draws its own triangle unless told not to. */
+.nav-group > summary::-webkit-details-marker {
+    display: none;
+}
+
+.nav-group > summary:hover {
+    color: var(--text);
+}
+
+.nav-group .chevron {
+    width: 0.9rem;
+    height: 0.9rem;
+    transform: rotate(-90deg);
+    transition: transform 0.15s;
+}
+
+.nav-group[open] .chevron {
+    transform: none;
+}
+
 .sidebar-footer {
     padding: 0.9rem 1.25rem;
     border-top: 1px solid var(--border);
@@ -686,6 +727,10 @@ input[type=checkbox] {
     .nav { display: flex; flex-wrap: wrap; }
     .nav a { border-left: none; border-bottom: 3px solid transparent; }
     .nav a.active { border-left: none; border-bottom-color: var(--accent); }
+    /* Its own row, with its links wrapping inside it as the ones above do. */
+    .nav-group { flex-basis: 100%; margin-top: 0.4rem; }
+    .nav-group[open] { display: flex; flex-wrap: wrap; }
+    .nav-group > summary { flex-basis: 100%; }
     .topbar { padding: 0 1rem; }
     /* The source is the first thing to go: the message is why anyone opened the page. */
     .log-table th:nth-child(3), .log-table td:nth-child(3) { display: none; }
