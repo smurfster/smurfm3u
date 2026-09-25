@@ -1,4 +1,4 @@
-# Smurfm3u
+<h1><img src="src/Smurfm3u.App/wwwroot/favicon.svg" width="40" height="40" alt="" align="top"> Smurfm3u</h1>
 
 Presents M3U playlists and Xtream panels to the *arr stack as if they were a Usenet indexer
 and a download client. Prowlarr searches it over **Newznab**; Sonarr and Radarr grab from it
@@ -61,6 +61,7 @@ Worth reading before you rely on it.
 | --- | --- |
 | **No TVDB, IMDb or TMDb ids** | The indexer advertises only `q`, `season` and `ep`, so the *arr apps match on **title text alone**. A show whose provider name differs from the one Sonarr knows will not be found, and Sonarr may reject a release as an unknown series. |
 | **Metadata is guessed from names** | For an m3u there is nothing else — season, episode, year and title are read back out of the display name with regular expressions, and odd naming gets misread. A panel states them outright, so panels are more reliable. |
+| **No language detection** | Every release is reported as English, whatever its audio. Language badges on names (`EN -`, `\|FR\|`) are stripped and not kept. Panels describe only the first audio track of an episode, often a dub on multi-audio files, and nothing at all for films, so there is nothing reliable to report. A foreign-language file reaches the *arr apps looking English. |
 | **Sizes are estimates** | Providers rarely declare one, so it is inferred from runtime and quality. The *arr apps use size to choose between releases and to check free space, and a season pack multiplies the error. |
 | **RSS only contains what has been fetched** | A panel's episodes arrive when searched for, so a series nobody has searched for is not in the feed. Use search rather than RSS sync to find new episodes. |
 | **The first search for a show waits** | A panel has no search endpoint, so a local index is unavoidable; the first query naming a series costs a round trip to fetch its episodes. Every one after is answered locally. |
