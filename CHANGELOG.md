@@ -9,6 +9,10 @@ what the UI reports is always what was built.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.3.0] - 2026-09-29
+
 ### Added
 
 - **Categories, as SABnzbd has them.** Settings has a Categories card where categories are
@@ -19,6 +23,8 @@ what the UI reports is always what was built.
 - **Change a grab's category** from a picker on each Queue row, or through SABnzbd's
   `change_cat`. It is read again when the download finishes, so a grab already running can
   be moved too.
+- A **`prowlarr` category** is listed out of the box, so a SABnzbd download client added in
+  Prowlarr passes its Test without its Category being changed or cleared.
 
 ### Changed
 
@@ -486,7 +492,8 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.2.15...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/smurfster/smurfm3u/compare/v1.2.15...v1.3.0
 [1.2.15]: https://github.com/smurfster/smurfm3u/compare/v1.2.14...v1.2.15
 [1.2.14]: https://github.com/smurfster/smurfm3u/compare/v1.2.13...v1.2.14
 [1.2.13]: https://github.com/smurfster/smurfm3u/compare/v1.2.12...v1.2.13
