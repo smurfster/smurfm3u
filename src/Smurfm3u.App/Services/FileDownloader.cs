@@ -105,7 +105,16 @@ public class FileDownloader(
                     : $"The provider no longer has any of the {download.Files.Count} files in this release.");
             }
 
-            download.CompletedPath = await FinishAsync(settings, download, transferred, workFolder);
+            // The category can be changed while the transfer runs, and the category list edited,
+            // so both are read again now rather than trusted from the start of a long download.
+            download.Category = await db.Downloads
+                .Where(x => x.Id == download.Id)
+                .Select(x => x.Category)
+                .FirstAsync(CancellationToken.None);
+            db.Entry(download).Property(x => x.Category).IsModified = false;
+
+            download.CompletedPath = await FinishAsync(
+                await settingsService.GetAsync(CancellationToken.None), download, transferred, workFolder);
             download.Status = DownloadStatus.Completed;
             download.CompletedAt = clock.GetUtcNow();
             download.BytesPerSecond = 0;
@@ -418,7 +427,7 @@ public class FileDownloader(
     }
 
     /// <summary>
-    /// Moves the finished files into one folder under the category directory, which is the
+    /// Moves the finished files into one folder under the category's folder, which is the
     /// layout SABnzbd produces and the *arr apps expect to scan. A single episode or film
     /// lands as one file named after the release; a pack lands as one file per episode, each
     /// named after its own, which is what lets the importer place them individually.
@@ -427,11 +436,12 @@ public class FileDownloader(
         Core.Options.ServiceSettings settings, DownloadItem download,
         IReadOnlyList<DownloadFile> transferred, string workFolder)
     {
-        var category = ReleaseNameBuilder.SanitizePathSegment(
-            string.IsNullOrWhiteSpace(download.Category) ? "other" : download.Category);
+        // A category removed since the grab was queued sends it to the default category's
+        // folder, as SABnzbd does, rather than recreating a folder nothing is configured for.
+        var category = DownloadCategories.Resolve(settings, download.Category);
         var folderName = ReleaseNameBuilder.SanitizePathSegment(download.Name);
 
-        var targetFolder = Path.Combine(settings.CompletePath, category, folderName);
+        var targetFolder = Path.Combine(DownloadCategories.OutputFolder(category, settings.CompletePath), folderName);
         Directory.CreateDirectory(targetFolder);
 
         foreach (var file in transferred)

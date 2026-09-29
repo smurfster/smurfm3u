@@ -12,6 +12,37 @@ Two mechanisms combine, and the tightest active constraint wins:
 
 Per-playlist limits apply on top of whichever global limit is in force.
 
+## Categories
+
+Categories work as they do in SABnzbd. Sonarr and Radarr file each grab under the category
+set in their download client, and the category decides two things: which folder the finished
+grab is moved into, and where it sits in the queue. They are edited under
+**Settings → Categories**, and reported to the *arr apps through `get_cats` and `get_config`.
+
+| Field | Meaning |
+| --- | --- |
+| Name | What the client sends. Kept in lower case, as SABnzbd keeps it. |
+| Folder | Relative to the complete directory (`media/tv` nests), or a full path. Blank means a folder named after the category. |
+| Priority | `Force`, `High`, `Normal` or `Low`, or `Default` to take the Default category's. |
+
+**Default** (SABnzbd's `*`) is always there and cannot be removed. It catches a grab with no
+category, one naming a category that is not listed, and one whose category was removed while
+it was queued. With a blank folder it puts finished grabs straight into the complete
+directory. A fresh install starts with Default, `tv` and `movies`.
+
+**Priority.** A grab asking for the `Default` priority &mdash; which is what Sonarr and Radarr
+send unless their *Recent/Older Priority* is changed &mdash; runs at its category's. A grab
+asking for a priority of its own keeps it, and one asking for `Paused` is queued paused.
+Higher priorities are started first, and grabs of equal priority in the order they arrived.
+`Force` is simply the highest: unlike SABnzbd, it does not download through a pause.
+
+**Changing a grab's category.** The Queue page has a category picker on every row, and
+clients can do the same through SABnzbd's `change_cat`. A grab already downloading can be
+moved too; the category is read again when it finishes. Its priority is left as it was.
+
+Grabs from the [Search page](searching.md#by-hand-in-the-web-ui) are filed under the
+categories picked under *Search page TV grabs* and *Search page movie grabs*.
+
 ## What one grab is
 
 A grab holds one or more files. A film or an episode is one; a

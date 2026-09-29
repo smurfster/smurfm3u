@@ -200,7 +200,7 @@ else
             var settings = await SettingsStore.GetAsync();
             var category = details.Kind == MediaKind.Series ? settings.TvCategory : settings.MovieCategory;
 
-            var download = await Downloads.EnqueueAsync(details.DownloadId, category, priority: 0, nameOverride: null);
+            var download = await Downloads.EnqueueAsync(details.DownloadId, category, priority: null, nameOverride: null);
 
             queued = true;
             message = $"Queued {download.Name}.";

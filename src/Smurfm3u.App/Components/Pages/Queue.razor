@@ -1,5 +1,6 @@
 @page "/queue"
 @using Microsoft.EntityFrameworkCore
+@using Smurfm3u.Core.Options
 @using Smurfm3u.Data
 @attribute [Authorize]
 @rendermode InteractiveServer
@@ -8,6 +9,7 @@
 @inject DownloadService Downloads
 @inject DownloadManager Manager
 @inject SpeedLimitService SpeedLimits
+@inject SettingsService SettingsStore
 
 <PageTitle>Queue - Smurfm3u</PageTitle>
 
@@ -71,7 +73,16 @@ else
                             @row.Name
                         }
                     </td>
-                    <td class="secondary">@(string.IsNullOrWhiteSpace(row.Category) ? "-" : row.Category)</td>
+                    <td class="secondary">
+                        @{ var current = DownloadCategories.Resolve(settings, row.Category).Name; }
+                        <select value="@current" style="width:auto" title="Where this grab lands when it finishes"
+                                @onchange="e => ChangeCategoryAsync(row.NzoId, e.Value as string)">
+                            @foreach (var category in settings.Categories)
+                            {
+                                <option value="@category.Name">@(category.IsDefault ? "Default" : category.Name)</option>
+                            }
+                        </select>
+                    </td>
                     <td>
                         <span class="pill @PillClass(row.Status)">@row.Status</span>
                         @if (row.AttemptCount > 1)
@@ -160,8 +171,13 @@ else
         }
     }
 
+    /// <summary>For the category pickers; read with the rows so an edited list shows up here.</summary>
+    private ServiceSettings settings = new();
+
     private async Task LoadAsync()
     {
+        settings = await SettingsStore.GetAsync();
+
         await using var db = await DbFactory.CreateDbContextAsync();
 
         var query = db.Downloads.AsNoTracking()
@@ -172,7 +188,7 @@ else
         total = await query.CountAsync();
 
         var items = await query
-            .OrderBy(x => x.Priority)
+            .OrderByDescending(x => x.Priority)
             .ThenBy(x => x.QueuedAt)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
@@ -223,6 +239,12 @@ else
     private async Task ResumeAsync(string nzoId)
     {
         await Downloads.ResumeAsync(nzoId);
+        await LoadAsync();
+    }
+
+    private async Task ChangeCategoryAsync(string nzoId, string? category)
+    {
+        await Downloads.ChangeCategoryAsync(nzoId, category);
         await LoadAsync();
     }
 

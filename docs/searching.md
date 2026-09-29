@@ -178,6 +178,7 @@ episode, and every match comes back with a **Download** button.
 
 Downloading from here queues the entry exactly as a grab from Sonarr or Radarr would,
 category included, so the file lands in the same place and can still be imported afterwards.
+Which category that is for TV and for films is set under **Settings → Categories**.
 The row says **Queued** once it is in, and the Queue page takes it from there.
 
 Useful for checking what a playlist actually contains, for grabbing something the *arr apps

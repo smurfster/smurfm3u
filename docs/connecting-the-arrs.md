@@ -73,7 +73,7 @@ Add a *SABnzbd* download client:
 | Port | `8080` |
 | URL Base | *leave empty* |
 | API Key | the same key |
-| Category | `tv` in Sonarr, `movies` in Radarr |
+| Category | `tv` in Sonarr, `movies` in Radarr &mdash; or any [category](downloads.md#categories) you have added |
 | Client Priority | a worse (higher) number than your real SABnzbd, e.g. `50` |
 | Tags | *leave empty* |
 
@@ -107,7 +107,9 @@ on those indexers too.
 ### 5. Let Sonarr and Radarr see the finished files
 
 Smurfm3u reports its completed folder as `/downloads/complete`, with a subfolder per
-category, so a finished TV grab lands in `/downloads/complete/tv/<Release.Name>/`.
+category, so a finished TV grab lands in `/downloads/complete/tv/<Release.Name>/`. A
+category can be given a different folder, even one outside the complete directory; see
+[Categories](downloads.md#categories).
 
 Sonarr and Radarr have to be able to read that themselves. There are two parts to this, and
 they are easy to confuse: the files must be **reachable**, and the path must **match**.

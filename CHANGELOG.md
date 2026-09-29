@@ -9,7 +9,32 @@ what the UI reports is always what was built.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Categories, as SABnzbd has them.** Settings has a Categories card where categories are
+  added, renamed and removed, each with its own **folder** (relative to the complete
+  directory, or a full path) and **priority**. `get_cats` and `get_config` report the real
+  list, so Sonarr and Radarr can pick any of them. The two TV and movie fields became the
+  categories the Search page files its grabs under, picked from the list.
+- **Change a grab's category** from a picker on each Queue row, or through SABnzbd's
+  `change_cat`. It is read again when the download finishes, so a grab already running can
+  be moved too.
+
+### Changed
+
+- **Priorities follow SABnzbd.** A grab sent with the `Default` priority, which Sonarr and
+  Radarr send out of the box, now runs at its category's priority instead of being stored as
+  `-100` and reported as Low. `Paused` queues the grab paused.
+- A category nobody configured, and a grab with none, now lands in the **Default** category
+  as in SABnzbd: straight into the complete directory rather than a made-up `other` or
+  category-named folder. Settings from an earlier version keep their TV and movie
+  categories, which become the first entries in the list.
+
+### Fixed
+
+- **The queue ran lowest priority first.** High and Force grabs waited behind Low ones,
+  because the queue was ordered with the smallest number first while SABnzbd's scale puts
+  the largest first.
 
 ## [1.2.15] - 2026-09-25
 

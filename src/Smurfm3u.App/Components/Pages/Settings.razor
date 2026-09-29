@@ -106,19 +106,107 @@ else
                 <label>Retry attempts</label>
                 <input type="number" @bind="settings.MaxDownloadAttempts" />
             </div>
-            <div class="field">
-                <label>TV category</label>
-                <input @bind="settings.TvCategory" />
-            </div>
-            <div class="field">
-                <label>Movie category</label>
-                <input @bind="settings.MovieCategory" />
-            </div>
         </div>
 
         <div class="field inline-field">
             <input type="checkbox" id="deleteFailed" @bind="settings.DeleteFailedFiles" />
             <label for="deleteFailed">Delete partial files when a download fails for good</label>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Categories</h2>
+        <p class="hint">
+            SABnzbd categories. Sonarr and Radarr file each grab under the category set in their
+            download client, and it decides where the finished folder goes and where the grab
+            sits in the queue. A category they send that is not listed here is treated as
+            Default. Names are kept in lower case, as SABnzbd keeps them.
+        </p>
+
+        <table>
+            <thead>
+            <tr>
+                <th>Name</th>
+                <th>Priority</th>
+                <th>Folder</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var category in settings.Categories)
+            {
+                <tr>
+                    <td>
+                        @if (category.IsDefault)
+                        {
+                            <span title="SABnzbd's catch-all category, *">Default</span>
+                        }
+                        else
+                        {
+                            <input @bind:get="category.Name" @bind:set="name => RenameCategory(category, name)"
+                                   placeholder="tv" />
+                        }
+                    </td>
+                    <td>
+                        <select @bind="category.Priority">
+                            @if (!category.IsDefault)
+                            {
+                                <option value="@SabPriority.Default">Default</option>
+                            }
+                            @foreach (var (value, name) in SabPriority.Choices)
+                            {
+                                <option value="@value">@name</option>
+                            }
+                        </select>
+                    </td>
+                    <td>
+                        <input class="mono" @bind="category.Folder"
+                               placeholder="@(category.IsDefault ? "(the complete directory)" : category.Name)" />
+                    </td>
+                    <td>
+                        @if (!category.IsDefault)
+                        {
+                            <button class="small danger" @onclick="() => RemoveCategory(category)">Remove</button>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        <div class="hint">
+            A folder is relative to the complete directory unless it is a full path. Left blank,
+            it is a folder named after the category, or the complete directory itself for
+            Default. A priority of Default takes Default&#39;s. A grab that asks for a priority of
+            its own keeps it; Sonarr and Radarr ask for Default unless told otherwise.
+        </div>
+
+        <div class="actions">
+            <button @onclick="AddCategory">Add category</button>
+        </div>
+
+        <div class="field-grid" style="margin-top:1rem">
+            <div class="field">
+                <label>Search page TV grabs</label>
+                <select @bind="settings.TvCategory">
+                    @foreach (var category in settings.Categories)
+                    {
+                        <option value="@category.Name">@CategoryLabel(category)</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label>Search page movie grabs</label>
+                <select @bind="settings.MovieCategory">
+                    @foreach (var category in settings.Categories)
+                    {
+                        <option value="@category.Name">@CategoryLabel(category)</option>
+                    }
+                </select>
+            </div>
+        </div>
+        <div class="hint">
+            The category a download started from the Search or Release page is filed under. Pick
+            the one Sonarr or Radarr uses, so it can still import the file.
         </div>
     </div>
 
@@ -652,6 +740,35 @@ else
 
     private void RemoveMapping(PathMapping mapping) => settings?.PathMappings.Remove(mapping);
 
+    private void AddCategory() => settings?.Categories.Add(new DownloadCategory());
+
+    /// <summary>
+    /// A grab from the Search page naming a removed category would fall back to Default on
+    /// save anyway; doing it here shows that before it happens.
+    /// </summary>
+    private void RemoveCategory(DownloadCategory category)
+    {
+        if (settings is null) return;
+
+        settings.Categories.Remove(category);
+        if (settings.TvCategory == category.Name) settings.TvCategory = DownloadCategory.DefaultName;
+        if (settings.MovieCategory == category.Name) settings.MovieCategory = DownloadCategory.DefaultName;
+    }
+
+    /// <summary>Carries the Search page's picks along with a rename, so they keep pointing at it.</summary>
+    private void RenameCategory(DownloadCategory category, string? name)
+    {
+        if (settings is null) return;
+
+        var renamed = name?.Trim().ToLowerInvariant() ?? string.Empty;
+        if (settings.TvCategory == category.Name) settings.TvCategory = renamed;
+        if (settings.MovieCategory == category.Name) settings.MovieCategory = renamed;
+        category.Name = renamed;
+    }
+
+    private static string CategoryLabel(DownloadCategory category) =>
+        category.IsDefault ? "Default" : category.Name;
+
     private void AddWindow() => windows.Add(new SpeedLimitWindow
     {
         Name = "Peak hours",
@@ -769,6 +886,9 @@ else
         // Copied element by element, or an abandoned edit would mutate the cached settings.
         PathMappings = source.PathMappings
             .Select(m => new PathMapping { From = m.From, To = m.To })
+            .ToList(),
+        Categories = source.Categories
+            .Select(c => new DownloadCategory { Name = c.Name, Folder = c.Folder, Priority = c.Priority })
             .ToList()
     };
 }

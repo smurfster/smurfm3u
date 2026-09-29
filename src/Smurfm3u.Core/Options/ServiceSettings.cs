@@ -42,7 +42,17 @@ public class ServiceSettings
     public int SearchHistoryRetentionDays { get; set; } = 30;
     public int DownloadHistoryRetentionDays { get; set; } = 90;
 
-    /// <summary>Category the *arrs use for TV; surfaced in the SABnzbd config response.</summary>
+    /// <summary>
+    /// The SABnzbd categories clients can file grabs under, the default ("*") first. Empty
+    /// only in settings saved before the list existed; <see cref="DownloadCategories.Normalise"/>
+    /// fills it in on load.
+    /// </summary>
+    public List<DownloadCategory> Categories { get; set; } = [];
+
+    /// <summary>
+    /// The categories a grab from the Search page is filed under, so it lands where the
+    /// matching *arr would have put it. They name entries in <see cref="Categories"/>.
+    /// </summary>
     public string TvCategory { get; set; } = "tv";
     public string MovieCategory { get; set; } = "movies";
 

@@ -65,7 +65,7 @@ public class DownloadWorker(
         var candidates = await db.Downloads
             .AsNoTracking()
             .Where(x => x.Status == DownloadStatus.Queued)
-            .OrderBy(x => x.Priority)
+            .OrderByDescending(x => x.Priority)
             .ThenBy(x => x.QueuedAt)
             .Take(freeSlots * 8)
             .Select(x => new { x.Id, x.SourceId })

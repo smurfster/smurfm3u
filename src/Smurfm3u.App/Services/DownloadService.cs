@@ -2,6 +2,7 @@ using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using Smurfm3u.Core.Entities;
 using Smurfm3u.Core.Models;
+using Smurfm3u.Core.Options;
 using Smurfm3u.Core.Parsing;
 using Smurfm3u.Data;
 
@@ -24,7 +25,7 @@ public class DownloadService(
     /// Returns the nzo id the client will track it by.
     /// </summary>
     public async Task<DownloadItem> EnqueueAsync(
-        string downloadId, string? category, int priority, string? nameOverride, CancellationToken ct = default)
+        string downloadId, string? category, int? priority, string? nameOverride, CancellationToken ct = default)
     {
         if (!SeasonPackId.TryParse(downloadId, out var packId))
         {
@@ -51,7 +52,7 @@ public class DownloadService(
     /// into one folder.
     /// </summary>
     public async Task<DownloadItem> EnqueueItemsAsync(
-        IReadOnlyList<long> itemIds, string? nameOverride, string? category, int priority,
+        IReadOnlyList<long> itemIds, string? nameOverride, string? category, int? priority,
         CancellationToken ct = default)
     {
         if (itemIds.Count == 0)
@@ -72,6 +73,7 @@ public class DownloadService(
 
         var settings = await settingsService.GetAsync(ct);
         var first = items[0];
+        var filedUnder = DownloadCategories.Resolve(settings, category);
 
         var download = new DownloadItem
         {
@@ -79,10 +81,13 @@ public class DownloadService(
             Name = string.IsNullOrWhiteSpace(nameOverride)
                 ? ReleaseFactory.BuildName(first, first.Source)
                 : nameOverride.Trim(),
-            Category = category?.Trim() ?? string.Empty,
+            // The default category is stored as no category, which is how rows from before
+            // categories were configurable already read.
+            Category = filedUnder.IsDefault ? string.Empty : filedUnder.Name,
             SourceId = first.SourceId,
-            Status = DownloadStatus.Queued,
-            Priority = priority,
+            // SABnzbd's "Paused" is not a place in the line but a way to arrive.
+            Status = priority == SabPriority.Paused ? DownloadStatus.Paused : DownloadStatus.Queued,
+            Priority = DownloadCategories.EffectivePriority(settings, filedUnder, priority),
             QueuedAt = clock.GetUtcNow()
         };
 
@@ -194,6 +199,28 @@ public class DownloadService(
         download.Status = DownloadStatus.Queued;
         await db.SaveChangesAsync(ct);
         return true;
+    }
+
+    /// <summary>
+    /// Files a queued grab under another category, which decides where it lands when it
+    /// finishes. The priority is left as it is, as SABnzbd does. Returns false for a grab that
+    /// is no longer in the queue.
+    /// </summary>
+    public async Task<bool> ChangeCategoryAsync(string nzoId, string? category, CancellationToken ct = default)
+    {
+        var settings = await settingsService.GetAsync(ct);
+        var filedUnder = DownloadCategories.Resolve(settings, category);
+
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+        var changed = await db.Downloads
+            .Where(x => x.NzoId == nzoId
+                        && (x.Status == DownloadStatus.Queued
+                            || x.Status == DownloadStatus.Downloading
+                            || x.Status == DownloadStatus.Paused))
+            .ExecuteUpdateAsync(
+                s => s.SetProperty(x => x.Category, filedUnder.IsDefault ? string.Empty : filedUnder.Name), ct);
+
+        return changed > 0;
     }
 
     /// <summary>Pauses or resumes everything currently in the queue.</summary>

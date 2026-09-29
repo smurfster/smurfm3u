@@ -47,6 +47,7 @@ public class SabnzbdController(SabnzbdHandler handler) : ControllerBase
             Mode = Read("mode") ?? string.Empty,
             Name = Read("name"),
             Value = Read("value"),
+            Value2 = Read("value2"),
             Category = Read("cat") ?? Read("category"),
             Priority = int.TryParse(Read("priority"), out var priority) ? priority : null,
             DeleteFiles = Read("del_files") is "1" or "true",

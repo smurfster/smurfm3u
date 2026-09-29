@@ -13,6 +13,10 @@ public sealed record SabRequest
     public string Mode { get; init; } = string.Empty;
     public string? Name { get; init; }
     public string? Value { get; init; }
+
+    /// <summary>The second argument some modes take, such as the new category for change_cat.</summary>
+    public string? Value2 { get; init; }
+
     public string? Category { get; init; }
     public int? Priority { get; init; }
     public bool DeleteFiles { get; init; }
@@ -54,7 +58,8 @@ public class SabnzbdHandler(
         {
             "auth" => new { auth = "apikey" },
             "get_config" => await GetConfigAsync(ct),
-            "get_cats" => new { categories = new[] { "*", settings.TvCategory, settings.MovieCategory } },
+            "get_cats" => new { categories = settings.Categories.Select(x => x.Name).ToArray() },
+            "change_cat" => await ChangeCategoryAsync(request, ct),
             "queue" => await QueueAsync(request, ct),
             "history" => await HistoryAsync(request, ct),
             "addfile" => await AddFileAsync(request, ct),
@@ -71,14 +76,20 @@ public class SabnzbdHandler(
     {
         var settings = await settingsService.GetAsync(ct);
 
-        // Category dir is relative to complete_dir, which is exactly how the downloader
+        // A relative dir is joined to complete_dir by the client, exactly as the downloader
         // lays finished files out, so the clients find them without a path mapping.
-        var categories = new List<object>
-        {
-            Category("*", 0, string.Empty),
-            Category(settings.TvCategory, 1, settings.TvCategory),
-            Category(settings.MovieCategory, 2, settings.MovieCategory)
-        };
+        var categories = settings.Categories
+            .Select((category, order) => (object)new
+            {
+                name = category.Name,
+                order,
+                pp = "3",
+                script = "None",
+                dir = DownloadCategories.ReportedFolder(category, settings.PathMappings),
+                newzbin = string.Empty,
+                priority = category.Priority
+            })
+            .ToList();
 
         return new
         {
@@ -105,17 +116,19 @@ public class SabnzbdHandler(
                 sorters = Array.Empty<object>()
             }
         };
+    }
 
-        static object Category(string name, int order, string dir) => new
-        {
-            name,
-            order,
-            pp = "3",
-            script = "None",
-            dir,
-            newzbin = string.Empty,
-            priority = 0
-        };
+    /// <summary>SABnzbd's <c>mode=change_cat&amp;value=nzo_id&amp;value2=category</c>.</summary>
+    private async Task<object> ChangeCategoryAsync(SabRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Value))
+            return new { status = false, error = "No nzo id supplied" };
+
+        var changed = false;
+        foreach (var nzoId in SplitValues(request.Value))
+            changed |= await downloads.ChangeCategoryAsync(nzoId, request.Value2, ct);
+
+        return new { status = changed };
     }
 
     private async Task<object> QueueAsync(SabRequest request, CancellationToken ct)
@@ -168,7 +181,7 @@ public class SabnzbdHandler(
             .Where(x => x.Status == DownloadStatus.Queued
                         || x.Status == DownloadStatus.Downloading
                         || x.Status == DownloadStatus.Paused)
-            .OrderBy(x => x.Priority)
+            .OrderByDescending(x => x.Priority)
             .ThenBy(x => x.QueuedAt)
             .ToListAsync(ct);
 
@@ -195,7 +208,7 @@ public class SabnzbdHandler(
                 index = index++,
                 nzo_id = row.NzoId,
                 unpackopts = "3",
-                priority = PriorityName(row.Priority),
+                priority = SabPriority.Name(row.Priority),
                 cat = string.IsNullOrWhiteSpace(row.Category) ? "*" : row.Category,
                 filename = row.Name,
                 labels = Array.Empty<string>(),
@@ -353,7 +366,7 @@ public class SabnzbdHandler(
             () => downloads.EnqueueItemsAsync(
                 payload.ItemIds,
                 string.IsNullOrWhiteSpace(request.NzbName) ? payload.ReleaseName : request.NzbName,
-                request.Category, request.Priority ?? 0, ct),
+                request.Category, request.Priority, ct),
             ct);
     }
 
@@ -368,7 +381,7 @@ public class SabnzbdHandler(
         {
             return await QueueAsync(
                 () => downloads.EnqueueAsync(
-                    downloadId, request.Category, request.Priority ?? 0, request.NzbName, ct),
+                    downloadId, request.Category, request.Priority, request.NzbName, ct),
                 ct);
         }
 
@@ -383,7 +396,7 @@ public class SabnzbdHandler(
                     () => downloads.EnqueueItemsAsync(
                         payload.ItemIds,
                         string.IsNullOrWhiteSpace(request.NzbName) ? payload.ReleaseName : request.NzbName,
-                        request.Category, request.Priority ?? 0, ct),
+                        request.Category, request.Priority, ct),
                     ct);
             }
         }
@@ -481,16 +494,6 @@ public class SabnzbdHandler(
         DownloadStatus.Completed => "Completed",
         DownloadStatus.Failed => "Failed",
         _ => "Deleted"
-    };
-
-    /// <summary>SAB priorities are -2 (default) to 2 (force); we store the numeric form.</summary>
-    private static string PriorityName(int priority) => priority switch
-    {
-        <= -2 => "Low",
-        -1 => "Low",
-        0 => "Normal",
-        1 => "High",
-        _ => "Force"
     };
 
     private static string AverageAge(DateTimeOffset queuedAt)

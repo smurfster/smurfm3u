@@ -34,7 +34,7 @@ public class SettingsService(IDbContextFactory<AppDbContext> dbFactory, ILogger<
             await using var db = await dbFactory.CreateDbContextAsync(ct);
             var row = await db.Settings.AsNoTracking().FirstOrDefaultAsync(x => x.Key == SettingsKey, ct);
 
-            _cached = Deserialize(row?.Value) ?? new ServiceSettings();
+            _cached = Deserialize(row?.Value) ?? Defaults();
             return _cached;
         }
         finally
@@ -45,6 +45,8 @@ public class SettingsService(IDbContextFactory<AppDbContext> dbFactory, ILogger<
 
     public async Task SaveAsync(ServiceSettings settings, CancellationToken ct = default)
     {
+        DownloadCategories.Normalise(settings);
+
         await _mutex.WaitAsync(ct);
         try
         {
@@ -72,11 +74,18 @@ public class SettingsService(IDbContextFactory<AppDbContext> dbFactory, ILogger<
     public async Task<ServiceSettings> UpdateAsync(Action<ServiceSettings> mutate, CancellationToken ct = default)
     {
         var current = await GetAsync(ct);
-        var copy = Deserialize(JsonSerializer.Serialize(current, Json)) ?? new ServiceSettings();
+        var copy = Deserialize(JsonSerializer.Serialize(current, Json)) ?? Defaults();
 
         mutate(copy);
         await SaveAsync(copy, ct);
         return copy;
+    }
+
+    private static ServiceSettings Defaults()
+    {
+        var settings = new ServiceSettings();
+        DownloadCategories.Normalise(settings);
+        return settings;
     }
 
     private ServiceSettings? Deserialize(string? value)
@@ -85,7 +94,9 @@ public class SettingsService(IDbContextFactory<AppDbContext> dbFactory, ILogger<
 
         try
         {
-            return JsonSerializer.Deserialize<ServiceSettings>(value, Json);
+            var settings = JsonSerializer.Deserialize<ServiceSettings>(value, Json);
+            if (settings is not null) DownloadCategories.Normalise(settings);
+            return settings;
         }
         catch (JsonException ex)
         {

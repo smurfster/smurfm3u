@@ -308,7 +308,7 @@
             var settings = await SettingsStore.GetAsync();
             var category = hit.Item.Kind == MediaKind.Series ? settings.TvCategory : settings.MovieCategory;
 
-            await Downloads.EnqueueAsync(hit.DownloadId, category, priority: 0, nameOverride: null);
+            await Downloads.EnqueueAsync(hit.DownloadId, category, priority: null, nameOverride: null);
 
             queued.Add(hit.DownloadId);
             SetMessage($"Queued {hit.ReleaseName}.", isError: false);

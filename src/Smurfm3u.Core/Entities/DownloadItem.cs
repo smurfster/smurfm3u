@@ -28,7 +28,7 @@ public class DownloadItem
 
     public DownloadStatus Status { get; set; } = DownloadStatus.Queued;
 
-    /// <summary>Lower runs first; SAB priorities map onto this.</summary>
+    /// <summary>A SABnzbd priority (-1 Low to 2 Force); higher runs first.</summary>
     public int Priority { get; set; }
 
     public long TotalBytes { get; set; }
