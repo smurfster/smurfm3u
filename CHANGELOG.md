@@ -11,6 +11,17 @@ what the UI reports is always what was built.
 
 Nothing yet.
 
+## [1.3.1] - 2026-09-29
+
+### Fixed
+
+- **The queue showed the estimated size for the whole download.** The real length a server
+  states when a file starts was recorded against the file but only reached the grab's size
+  once the file had finished, so a film or an episode showed its runtime-based estimate until
+  the end. The size now updates the moment the server states it, on the Queue page and to
+  Sonarr and Radarr alike, and a real size smaller than the estimate is no longer hidden
+  behind it.
+
 ## [1.3.0] - 2026-09-29
 
 ### Added
@@ -492,7 +503,8 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.3.1...HEAD
+[1.3.1]: https://github.com/smurfster/smurfm3u/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/smurfster/smurfm3u/compare/v1.2.15...v1.3.0
 [1.2.15]: https://github.com/smurfster/smurfm3u/compare/v1.2.14...v1.2.15
 [1.2.14]: https://github.com/smurfster/smurfm3u/compare/v1.2.13...v1.2.14
