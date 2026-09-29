@@ -195,7 +195,10 @@ public class SabnzbdHandler(
             // The database row lags a couple of seconds behind; live state is more useful here.
             var live = manager.Get(row.Id);
             var downloaded = live is not null ? Interlocked.Read(ref live.DownloadedBytes) : row.DownloadedBytes;
-            var total = Math.Max(row.TotalBytes, live is not null ? Interlocked.Read(ref live.TotalBytes) : 0);
+            var liveTotal = live is not null ? Interlocked.Read(ref live.TotalBytes) : 0;
+            // The live total is the real length once the server has stated it, which may be less
+            // than the estimate the row was queued with; the row only catches up on its next save.
+            var total = liveTotal > 0 ? liveTotal : row.TotalBytes;
             var rate = live is not null ? Interlocked.Read(ref live.BytesPerSecond) : 0;
             var left = Math.Max(0, total - downloaded);
 

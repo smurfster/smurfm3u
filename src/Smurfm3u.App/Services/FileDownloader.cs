@@ -252,23 +252,32 @@ public class FileDownloader(
                 await db.SaveChangesAsync(CancellationToken.None);
             }
 
-            // Recalculated from what the files actually declared, so a pack's estimate is
-            // replaced by real lengths as they come in rather than only at the end. Files
-            // that have gone drop out of it, so the size shown shrinks to what is coming and
-            // progress can reach the end - unless nothing is coming, in which case the row
-            // keeps the size it was queued with rather than reading as a zero-byte release.
-            var expected = files
-                .Where(x => x.Status != DownloadFileStatus.Skipped)
-                .Sum(x => x.TotalBytes);
-
+            // A file that has gone drops out of the total, so the size shown shrinks to what is
+            // coming and progress can reach the end.
             download.DownloadedBytes = carried;
-            if (expected > 0) download.TotalBytes = expected;
-
-            Interlocked.Exchange(ref handle.TotalBytes, download.TotalBytes);
+            RefreshTotal(download, handle);
             await db.SaveChangesAsync(CancellationToken.None);
         }
 
         return true;
+    }
+
+    /// <summary>
+    /// Recalculates the grab's size from what its files have declared so far, so the queue
+    /// shows the real length the moment a server states it rather than the estimate the grab
+    /// was queued with. A pack's files that have not started yet are still estimates, and are
+    /// replaced one by one as they start. Skipped files are left out - unless nothing is left,
+    /// in which case the row keeps its size rather than reading as a zero-byte release.
+    /// </summary>
+    private static void RefreshTotal(DownloadItem download, ActiveDownload handle)
+    {
+        var expected = download.Files
+            .Where(x => x.Status != DownloadFileStatus.Skipped)
+            .Sum(x => x.TotalBytes);
+
+        if (expected > 0) download.TotalBytes = expected;
+
+        Interlocked.Exchange(ref handle.TotalBytes, download.TotalBytes);
     }
 
     private static string Extension(DownloadFile file) =>
@@ -329,6 +338,7 @@ public class FileDownloader(
 
         if (total > 0) file.TotalBytes = total;
         file.DownloadedBytes = resumeFrom;
+        RefreshTotal(download, handle);
 
         // What the client sees is the whole grab, so a file's progress is added to whatever
         // the files before it already contributed.
