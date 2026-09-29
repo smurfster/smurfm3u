@@ -21,9 +21,27 @@ public class DownloadCategoryTests
 
         DownloadCategories.Normalise(settings);
 
-        Assert.Equal(["*", "sonarr", "radarr"], settings.Categories.Select(x => x.Name));
+        Assert.Equal(["*", "sonarr", "radarr", "prowlarr"], settings.Categories.Select(x => x.Name));
         Assert.Equal(SabPriority.Normal, settings.Categories[0].Priority);
         Assert.Equal("sonarr", settings.TvCategory);
+    }
+
+    [Fact]
+    public void AFreshInstallListsTheCategoryProwlarrAsksFor()
+    {
+        var settings = new ServiceSettings();
+
+        DownloadCategories.Normalise(settings);
+
+        Assert.Equal(["*", "tv", "movies", "prowlarr"], settings.Categories.Select(x => x.Name));
+    }
+
+    [Fact]
+    public void ASavedListIsNotGivenTheProwlarrCategoryBack()
+    {
+        var settings = Settings(Category("tv"));
+
+        Assert.Equal(["*", "tv"], settings.Categories.Select(x => x.Name));
     }
 
     [Fact]

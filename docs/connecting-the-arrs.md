@@ -62,6 +62,12 @@ The categories Smurfm3u advertises:
 | --- | --- |
 | 2000, 2030 (SD), 2040 (HD), 2045 (UHD) | 5000, 5030 (SD), 5040 (HD), 5045 (UHD) |
 
+**A download client in Prowlarr is optional.** Prowlarr only uses one for the download button
+on its own search page; Sonarr and Radarr grab through theirs. If you add one, add it as a
+*SABnzbd* client with the same host, port and API key as in step 3, and leave its Category on
+`prowlarr`: Smurfm3u lists that [category](downloads.md#categories) so Prowlarr's Test
+passes. (Before 1.3.0 it did not, and the Test failed until Category was cleared.)
+
 ### 3. Sonarr and Radarr — add the download client
 
 Add a *SABnzbd* download client:

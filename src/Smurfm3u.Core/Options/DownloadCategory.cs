@@ -64,11 +64,15 @@ public static class SabPriority
 /// <summary>How a grab's requested category and priority turn into a folder and a queue position.</summary>
 public static class DownloadCategories
 {
+    /// <summary>The category Prowlarr's SABnzbd download client is set to unless changed.</summary>
+    public const string ProwlarrName = "prowlarr";
+
     /// <summary>
     /// Puts the list into the shape everything else relies on: the default category first
     /// and only once, with a priority of its own, and no blank, repeated or upper-case names.
-    /// A list that was never saved - settings from before categories were editable - is built
-    /// from the TV and movie category names, which is what those installs reported to clients.
+    /// A list that was never saved - a fresh install, or settings from before categories were
+    /// editable - is built from the TV and movie category names, which is what those installs
+    /// reported to clients, plus the one Prowlarr's download client asks for out of the box.
     /// </summary>
     public static void Normalise(ServiceSettings settings)
     {
@@ -78,6 +82,10 @@ public static class DownloadCategories
         {
             existing.Add(new DownloadCategory { Name = settings.TvCategory });
             existing.Add(new DownloadCategory { Name = settings.MovieCategory });
+
+            // Prowlarr's SABnzbd client defaults to this category and its Test fails when the
+            // category is not listed, so it is there before anyone has to go looking.
+            existing.Add(new DownloadCategory { Name = ProwlarrName });
         }
 
         var fallback = existing.FirstOrDefault(x => x.Name?.Trim() == DownloadCategory.DefaultName)

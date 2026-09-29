@@ -28,7 +28,8 @@ grab is moved into, and where it sits in the queue. They are edited under
 **Default** (SABnzbd's `*`) is always there and cannot be removed. It catches a grab with no
 category, one naming a category that is not listed, and one whose category was removed while
 it was queued. With a blank folder it puts finished grabs straight into the complete
-directory. A fresh install starts with Default, `tv` and `movies`.
+directory. A fresh install starts with Default, `tv`, `movies` and `prowlarr`, the last
+being the category Prowlarr's download client asks for unless it is changed.
 
 **Priority.** A grab asking for the `Default` priority &mdash; which is what Sonarr and Radarr
 send unless their *Recent/Older Priority* is changed &mdash; runs at its category's. A grab
