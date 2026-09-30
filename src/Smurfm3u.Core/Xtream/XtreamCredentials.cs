@@ -85,6 +85,22 @@ public sealed record XtreamCredentials(string BaseUrl, string Username, string P
     /// </summary>
     public string StreamUrl(XtreamStreamKind kind, string id, string? extension)
     {
+        // Lowercased here as well as in the catalogue, so the extension in the URL and the one
+        // recorded against the entry cannot disagree about case whoever built them.
+        var ext = string.IsNullOrWhiteSpace(extension)
+            ? "mp4"
+            : extension.Trim().TrimStart('.').ToLowerInvariant();
+
+        return $"{StreamPrefix(kind)}{id}.{ext}";
+    }
+
+    /// <summary>
+    /// Everything of a stream's address before its id. It is all that differs between an
+    /// entry's address under one panel login and under another, which is what lets a panel
+    /// that moves have its stored addresses moved with it.
+    /// </summary>
+    public string StreamPrefix(XtreamStreamKind kind)
+    {
         var segment = kind switch
         {
             XtreamStreamKind.Series => "series",
@@ -92,13 +108,7 @@ public sealed record XtreamCredentials(string BaseUrl, string Username, string P
             _ => "movie"
         };
 
-        // Lowercased here as well as in the catalogue, so the extension in the URL and the one
-        // recorded against the entry cannot disagree about case whoever built them.
-        var ext = string.IsNullOrWhiteSpace(extension)
-            ? "mp4"
-            : extension.Trim().TrimStart('.').ToLowerInvariant();
-
-        return $"{BaseUrl}/{segment}/{Uri.EscapeDataString(Username)}/{Uri.EscapeDataString(Password)}/{id}.{ext}";
+        return $"{BaseUrl}/{segment}/{Uri.EscapeDataString(Username)}/{Uri.EscapeDataString(Password)}/";
     }
 
     /// <summary>

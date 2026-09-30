@@ -15,6 +15,7 @@
 @inject AuthenticationStateProvider AuthState
 @inject ILogger<Sources> Log
 @inject RefreshProgress Progress
+@inject PanelMoveService PanelMove
 @implements IDisposable
 
 <PageTitle>Playlists - Smurfm3u</PageTitle>
@@ -509,6 +510,12 @@ else
             return;
         }
 
+        // Where the panel's streams lived before this edit, to move them if it changes that.
+        var before = editing.Id != 0 && entity.Kind == M3uSourceKind.Xtream
+                     && XtreamCredentials.TryCreate(entity.Location, entity.Username, entity.Password, out var was, out _)
+            ? was
+            : null;
+
         editing.ApplyTo(entity);
 
         if (editing.Id == 0)
@@ -554,7 +561,35 @@ else
                 user, entity.Name, changed.Length == 0 ? "nothing" : string.Join(", ", changed));
         }
 
-        SetMessage(isNew ? $"Added {entity.Name}." : $"Saved {entity.Name}.", isError: false);
+        var saved = isNew ? $"Added {entity.Name}." : $"Saved {entity.Name}.";
+
+        // A new address or login changes every stream address stored for the panel. Moved now,
+        // rather than left to each series being searched for, which for most never happens.
+        if (before is not null && entity.Kind == M3uSourceKind.Xtream
+            && XtreamCredentials.TryCreate(entity.Location, entity.Username, entity.Password, out var now, out _))
+        {
+            try
+            {
+                var moved = await PanelMove.MoveAsync(entity.Id, before, now);
+
+                if (moved.Entries + moved.Downloads > 0)
+                {
+                    Log.LogInformation("{User} moved {Name} to a new panel address: {Entries} entries, {Downloads} queued files",
+                        user, entity.Name, moved.Entries, moved.Downloads);
+
+                    saved += $" {moved.Entries:N0} entries now stream from the new address.";
+                }
+            }
+            catch (Exception ex)
+            {
+                // The source itself is saved; only the stored addresses are behind, and each
+                // series' episodes still catch up the next time it is searched for.
+                Log.LogError(ex, "Could not move the stored addresses of {Name} to its new panel address", entity.Name);
+                saved += " Its stored stream addresses could not be moved; a refresh will bring the films across.";
+            }
+        }
+
+        SetMessage(saved, isError: false);
         editing = null;
 
         await LoadAsync();

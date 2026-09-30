@@ -60,6 +60,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
         services.AddScoped<CacheBrowserService>();
         services.AddScoped<BackupService>();
         services.AddScoped<ReleaseDetailsService>();
+        services.AddScoped<PanelMoveService>();
 
         provider = services.BuildServiceProvider();
         DbFactory = provider.GetRequiredService<IDbContextFactory<AppDbContext>>();
