@@ -11,6 +11,26 @@ what the UI reports is always what was built.
 
 Nothing yet.
 
+## [1.5.0] - 2026-09-30
+
+### Added
+
+- **Daily shows, searched by air date.** Sonarr asks for a soap or a news show by the day it
+  aired, and those searches now find it. An entry's air date is read from its name
+  (`EastEnders 29/09/2026`, `EastEnders 2026-09-29`) or from the panel's air date for the
+  episode, and the releases a date search offers are named by date,
+  `EastEnders.2026.09.29.1080p.WEB-DL-Smurfm3u`, so Sonarr can place them. Entries already
+  stored pick up their date on the next refresh. See
+  [Daily shows](docs/searching.md#daily-shows).
+- **The air date in the search history.** A search by date shows the day it asked for in the
+  Episode column, rather than the year as though it were a season.
+
+### Changed
+
+- **A date in a name is no longer part of the title.** `EastEnders 29/09/2026` was stored as
+  the show "EastEnders 29 09" from the year 2026; it is now EastEnders, aired that day. Films
+  are read as before.
+
 ## [1.4.3] - 2026-09-30
 
 ### Fixed
@@ -547,7 +567,8 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.4.3...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/smurfster/smurfm3u/compare/v1.4.3...v1.5.0
 [1.4.3]: https://github.com/smurfster/smurfm3u/compare/v1.4.2...v1.4.3
 [1.4.2]: https://github.com/smurfster/smurfm3u/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/smurfster/smurfm3u/compare/v1.4.0...v1.4.1
