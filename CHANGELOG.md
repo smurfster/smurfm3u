@@ -11,6 +11,16 @@ what the UI reports is always what was built.
 
 Nothing yet.
 
+## [1.3.2] - 2026-09-30
+
+### Added
+
+- **Reclaim disk space** on the Cache page. Clearing deletes entries, but PostgreSQL only
+  marks deleted rows dead and never shrinks its files, so the database stayed the same size
+  on disk however much was cleared. The new button rewrites the cache tables without the dead
+  rows (`VACUUM FULL`) and reports the size before and after. The page also shows how much
+  disk the database is using.
+
 ## [1.3.1] - 2026-09-29
 
 ### Fixed
@@ -503,7 +513,8 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.3.1...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.3.2...HEAD
+[1.3.2]: https://github.com/smurfster/smurfm3u/compare/v1.3.1...v1.3.2
 [1.3.1]: https://github.com/smurfster/smurfm3u/compare/v1.3.0...v1.3.1
 [1.3.0]: https://github.com/smurfster/smurfm3u/compare/v1.2.15...v1.3.0
 [1.2.15]: https://github.com/smurfster/smurfm3u/compare/v1.2.14...v1.2.15
