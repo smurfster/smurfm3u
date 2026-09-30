@@ -11,6 +11,15 @@ what the UI reports is always what was built.
 
 Nothing yet.
 
+## [1.4.3] - 2026-09-30
+
+### Fixed
+
+- **Prowlarr disabled the indexer when Sonarr searched a daily show.** Sonarr asks for a
+  daily show by air date (`season=2026&ep=09/29`), which was rejected as a bad request
+  rather than answered, and Prowlarr counts that as the indexer failing. It is now answered
+  with no results: entries carry no air date, so searching by one is not supported yet.
+
 ## [1.4.2] - 2026-09-30
 
 ### Changed
@@ -538,7 +547,8 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.4.2...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.4.3...HEAD
+[1.4.3]: https://github.com/smurfster/smurfm3u/compare/v1.4.2...v1.4.3
 [1.4.2]: https://github.com/smurfster/smurfm3u/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/smurfster/smurfm3u/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/smurfster/smurfm3u/compare/v1.3.2...v1.4.0
