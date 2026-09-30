@@ -50,6 +50,7 @@ Sonarr / Radarr ─send──► /api  (SABnzbd, mode=…) ──► queue ─�
 
 - Web UI with light and dark themes, a live **log** page, download and search **history**, and
   a **cache browser** for inspecting and clearing what each playlist has stored.
+- **Backup and restore** of the settings, playlists and logins in one small file.
 - **HTTP and SOCKS proxy** for playlist fetches and downloads, applied without a restart.
 - **Email notifications** per event.
 
@@ -109,6 +110,7 @@ Then work through [Setting it up](docs/setup.md) and
 | [Proxy](docs/proxy.md) | HTTP and SOCKS proxies for playlist fetches and downloads |
 | [Notifications](docs/notifications.md) | SMTP, and which events send one |
 | [Cache](docs/cache.md) | What the playlists have cached, and clearing any of it |
+| [Backup](docs/backup.md) | Saving the settings and playlists to a file, and restoring them |
 | [Logs](docs/logs.md) | The log page, and what a refresh writes to it |
 | [Development](docs/development.md) | Project layout, building, migrations and versioning |
 

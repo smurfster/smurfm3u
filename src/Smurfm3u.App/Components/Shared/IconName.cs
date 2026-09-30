@@ -13,6 +13,7 @@ public enum IconName
     Settings,
     Cache,
     Logs,
+    Backup,
     Sun,
     Moon,
     SignOut,

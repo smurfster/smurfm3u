@@ -1,0 +1,174 @@
+@page "/backup"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject BackupService Backups
+@inject SpeedLimitService SpeedLimits
+
+<PageTitle>Backup - Smurfm3u</PageTitle>
+
+<h1>Backup</h1>
+
+@if (message is not null)
+{
+    <div class="alert @(messageIsError ? "bad" : "ok")">@message</div>
+}
+
+<div class="card">
+    <h2>Download a backup</h2>
+
+    <p>
+        One file holding the settings, the playlists, the speed limit windows and the logins &mdash;
+        everything that cannot be got back on its own.
+    </p>
+    <p class="muted">
+        The cache is not in it: it is most of the database, and a refresh rebuilds it. Nor is the
+        download or search history.
+    </p>
+    <p class="muted">
+        Keep the file somewhere private. It holds the API key, the playlists' panel passwords as
+        they were entered, and each login's password hash.
+    </p>
+
+    @* A plain link rather than a handler: the browser saves the file, which a circuit cannot. *@
+    <a class="btn primary" href="backup/download" download data-enhance-nav="false">Download backup</a>
+</div>
+
+<div class="card">
+    <h2>Restore from a backup</h2>
+
+    <p>
+        Pick a backup file to see what is in it. Nothing changes until you confirm.
+    </p>
+
+    <div class="field">
+        <InputFile OnChange="LoadAsync" accept=".json,application/json" disabled="@busy" />
+    </div>
+
+    @if (pending is { } backup)
+    {
+        <table>
+            <tbody>
+            <tr>
+                <td>Made</td>
+                <td>
+                    @backup.CreatedAt.LocalDateTime.ToString("dddd d MMMM yyyy, HH:mm")
+                    <span class="muted">by v@(backup.AppVersion ?? "unknown")</span>
+                </td>
+            </tr>
+            <tr>
+                <td>Settings</td>
+                <td>@(backup.Settings is null ? "not included" : "included, API key and all")</td>
+            </tr>
+            <tr>
+                <td>Playlists</td>
+                <td>@PlaylistNames(backup)</td>
+            </tr>
+            <tr>
+                <td>Speed limit windows</td>
+                <td>@backup.SpeedLimits.Count</td>
+            </tr>
+            <tr>
+                <td>Logins</td>
+                <td>@string.Join(", ", backup.Users.Select(x => x.Username))</td>
+            </tr>
+            </tbody>
+        </table>
+
+        <p class="muted">
+            The settings and the speed limit windows are replaced. Playlists and logins are matched
+            by name: a match is updated in place and keeps its cache and history, anything new is
+            added, and anything not in the backup is left as it is. Download or search history
+            is not touched.
+        </p>
+
+        <div class="actions">
+            <button class="primary" disabled="@busy" @onclick="RestoreAsync">
+                @(busy ? "Restoring…" : "Restore this backup")
+            </button>
+            <button disabled="@busy" @onclick="() => pending = null">Cancel</button>
+        </div>
+    }
+</div>
+
+@code {
+    private Backup? pending;
+
+    private bool busy;
+    private string? message;
+    private bool messageIsError;
+
+    private async Task LoadAsync(InputFileChangeEventArgs e)
+    {
+        pending = null;
+        message = null;
+
+        try
+        {
+            await using var stream = e.File.OpenReadStream(BackupService.MaxFileBytes);
+            pending = await BackupService.ReadAsync(stream);
+        }
+        catch (IOException ex)
+        {
+            // What OpenReadStream throws for a file over the limit.
+            SetMessage($"That file is too large to be a backup: {ex.Message}", isError: true);
+        }
+        catch (InvalidDataException ex)
+        {
+            SetMessage(ex.Message, isError: true);
+        }
+    }
+
+    private async Task RestoreAsync()
+    {
+        if (pending is not { } backup) return;
+
+        busy = true;
+
+        try
+        {
+            var restored = await Backups.RestoreAsync(backup);
+
+            // The windows are read into memory, so the new ones only apply once re-read.
+            await SpeedLimits.RefreshAsync();
+
+            pending = null;
+            SetMessage(Describe(restored), isError: false);
+        }
+        catch (Exception ex)
+        {
+            SetMessage($"Could not restore that backup, and nothing was changed: {ex.Message}", isError: true);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string PlaylistNames(Backup backup) =>
+        backup.Playlists.Count == 0
+            ? "none"
+            : $"{backup.Playlists.Count} — {string.Join(", ", backup.Playlists.Select(x => x.Name))}";
+
+    private static string Describe(BackupRestored restored)
+    {
+        var parts = new List<string>();
+
+        if (restored.Settings) parts.Add("the settings");
+
+        parts.Add($"{restored.PlaylistsAdded} playlist{(restored.PlaylistsAdded == 1 ? "" : "s")} added and {restored.PlaylistsUpdated} updated");
+        parts.Add($"{restored.SpeedLimits} speed limit window{(restored.SpeedLimits == 1 ? "" : "s")}");
+        parts.Add($"{restored.UsersAdded} login{(restored.UsersAdded == 1 ? "" : "s")} added and {restored.UsersUpdated} updated");
+
+        var text = "Restored " + string.Join(", ", parts) + ".";
+
+        return restored.PlaylistsAdded > 0
+            ? text + " New playlists are empty until they are refreshed, on the Playlists page."
+            : text;
+    }
+
+    private void SetMessage(string text, bool isError)
+    {
+        message = text;
+        messageIsError = isError;
+    }
+}

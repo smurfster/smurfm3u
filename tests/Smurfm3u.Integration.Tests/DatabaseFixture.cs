@@ -58,6 +58,7 @@ public sealed class DatabaseFixture : IAsyncLifetime
         services.AddScoped<SearchService>();
         services.AddScoped<SearchHistoryService>();
         services.AddScoped<CacheBrowserService>();
+        services.AddScoped<BackupService>();
         services.AddScoped<ReleaseDetailsService>();
 
         provider = services.BuildServiceProvider();

@@ -43,6 +43,7 @@ builder.Services.AddScoped<SeriesBackfill>();
 builder.Services.AddScoped<SeasonPackService>();
 builder.Services.AddScoped<ReleaseDetailsService>();
 builder.Services.AddScoped<CacheBrowserService>();
+builder.Services.AddScoped<BackupService>();
 builder.Services.AddScoped<SabnzbdHandler>();
 builder.Services.AddScoped<XtreamClient>();
 builder.Services.AddScoped<M3uRefreshService>();
@@ -141,6 +142,16 @@ app.MapGet("/health", async (IDbContextFactory<AppDbContext> factory, Cancellati
         ? Results.Ok(new { status = "healthy" })
         : Results.Problem("Database unreachable", statusCode: StatusCodes.Status503ServiceUnavailable);
 });
+
+// A plain GET behind the sign-in cookie, so the browser saves the file itself; a Blazor
+// circuit has no way to hand one over without script.
+app.MapGet("/backup/download", async (BackupService backups, CancellationToken ct) =>
+{
+    var backup = await backups.CreateAsync(ct);
+    var bytes = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(backup, BackupService.Json);
+
+    return Results.File(bytes, "application/json", $"smurfm3u-backup-{backup.CreatedAt:yyyyMMdd-HHmm}.json");
+}).RequireAuthorization();
 
 app.MapStaticAssets();
 app.MapControllers();

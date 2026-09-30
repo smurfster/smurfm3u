@@ -9,7 +9,14 @@ what the UI reports is always what was built.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Backup and restore.** A new Backup page downloads the settings, playlists, speed limit
+  windows and logins as one small JSON file, and restores them from one after showing what it
+  holds. The cache and the history are left out; a refresh rebuilds the one and the other
+  belongs to the install. A restore replaces the settings and speed limits, and matches
+  playlists and logins by name, so an existing playlist keeps its cache and nothing absent
+  from the backup is deleted.
 
 ## [1.3.2] - 2026-09-30
 
