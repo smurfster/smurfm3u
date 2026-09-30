@@ -139,29 +139,14 @@ public class XtreamClient(
         CancellationToken ct = default)
     {
         var client = httpClientFactory.CreateClient("playlist");
-        var info = await SeriesInfoAsync(client, credentials, series, source.Headers, ct);
-
-        return info is null ? [] : XtreamCatalogue.ForSeries(series, info, category, credentials).ToList();
-    }
-
-    /// <summary>
-    /// One series' episode list. A series that fails is logged and skipped rather than taking
-    /// the whole refresh down: one bad entry out of thousands is not worth losing the rest.
-    /// </summary>
-    private async Task<XtreamSeriesInfo?> SeriesInfoAsync(
-        HttpClient client, XtreamCredentials credentials, XtreamSeries series, string? headers, CancellationToken ct)
-    {
         var url = credentials.Api("get_series_info", ("series_id", series.SeriesId!));
 
-        try
-        {
-            return await GetAsync<XtreamSeriesInfo>(client, url, headers, "get_series_info", ct);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            logger.LogWarning(ex, "Could not read episodes for series {Series} ({Id})", series.Name, series.SeriesId);
-            return null;
-        }
+        // A failure throws rather than answering with no episodes. The caller cannot tell an
+        // empty list from a refused request, and an empty list retires every episode stored.
+        var info = await GetAsync<XtreamSeriesInfo>(client, url, source.Headers, "get_series_info", ct)
+                   ?? throw new InvalidOperationException("The panel's answer to get_series_info was empty.");
+
+        return XtreamCatalogue.ForSeries(series, info, category, credentials).ToList();
     }
 
     private async Task<List<T>> GetListAsync<T>(

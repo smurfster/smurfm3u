@@ -262,7 +262,12 @@ public class SeriesBackfill(
         //
         // Without this a removed episode would stay on offer forever: the refresh exempts
         // episodes from its own reconcile, so a re-fetch is the only place that can notice.
-        var withdrawn = await db.Items
+        //
+        // Not when the panel listed nothing at all. Panels answer a refused or broken request
+        // with an empty episode list as readily as with an error, and taking that at its word
+        // retired all six thousand episodes of a soap in one go. A series that really is gone
+        // leaves the series list, and the refresh retires it from there.
+        var withdrawn = episodes.Count == 0 ? 0 : await db.Items
             .Where(x => x.SourceId == source.Id && x.SeriesId == series.SeriesId
                         && x.IsActive && x.LastSeenAt < stamp)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.IsActive, false), ct);

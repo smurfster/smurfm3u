@@ -49,6 +49,7 @@ builder.Services.AddScoped<XtreamClient>();
 builder.Services.AddScoped<M3uRefreshService>();
 builder.Services.AddScoped<FileDownloader>();
 builder.Services.AddScoped<SearchTitleRepair>();
+builder.Services.AddScoped<AirDateRepair>();
 builder.Services.AddScoped<DatabaseInitializer>();
 builder.Services.AddScoped<StartupRecoveryService>();
 builder.Services.AddScoped<SearchHistoryService>();

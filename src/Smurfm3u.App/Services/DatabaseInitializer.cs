@@ -15,6 +15,7 @@ public class DatabaseInitializer(
     UserService users,
     SettingsService settingsService,
     SearchTitleRepair searchTitles,
+    AirDateRepair airDates,
     IOptions<BootstrapOptions> bootstrap,
     ILogger<DatabaseInitializer> logger)
 {
@@ -60,6 +61,7 @@ public class DatabaseInitializer(
         // After the schema is up to date, because it rewrites rows the migrations may have
         // just created, and before anything is served, so no search sees the stale keys.
         await searchTitles.RunAsync(ct);
+        await airDates.RunAsync(ct);
     }
 
     private async Task EnsureDirectoriesAsync(CancellationToken ct)
