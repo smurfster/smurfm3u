@@ -35,8 +35,11 @@ public class NewznabController(
         [FromQuery] string? t,
         [FromQuery] string? apikey,
         [FromQuery] string? q,
-        [FromQuery] int? season,
-        [FromQuery] int? ep,
+        // Strings, because Sonarr asks for a daily show by air date - season=2026&ep=09/29 - and
+        // bound as numbers that is rejected with a 400 before we ever see it. Prowlarr counts a
+        // 400 as the indexer failing, and disables it after a few.
+        [FromQuery] string? season,
+        [FromQuery] string? ep,
         [FromQuery] string? cat,
         // A string, because a release is either one entry's id or a whole season's. A single
         // entry still reads as the bare number it always was, so links already out there work.
@@ -62,7 +65,9 @@ public class NewznabController(
             "caps" => Caps(),
             "get" or "download" => await GetNzbAsync(id, ct),
             "search" => await SearchAsync(SearchKind.Search, q, null, null, cat, offset, limit, ct),
-            "tvsearch" => await SearchAsync(SearchKind.TvSearch, q, season, ep, cat, offset, limit, ct),
+            "tvsearch" => await SearchAsync(
+                SearchKind.TvSearch, q, ParseNumber(season), ParseNumber(ep), cat, offset, limit, ct,
+                airDate: ep?.Contains('/') == true ? $"{season}/{ep}" : null),
             "movie" => await SearchAsync(SearchKind.MovieSearch, q, null, null, cat, offset, limit, ct),
             _ => NewznabError(202, $"No such function ({mode})")
         };
@@ -110,7 +115,8 @@ public class NewznabController(
     }
 
     private async Task<IActionResult> SearchAsync(
-        SearchKind kind, string? q, int? season, int? ep, string? cat, int offset, int limit, CancellationToken ct)
+        SearchKind kind, string? q, int? season, int? ep, string? cat, int offset, int limit, CancellationToken ct,
+        string? airDate = null)
     {
         var started = Stopwatch.GetTimestamp();
         var categories = ParseCategories(cat);
@@ -122,6 +128,16 @@ public class NewznabController(
         // ceiling, fetching entries nobody asked for.
         var feedCap = string.IsNullOrWhiteSpace(q) ? settings.RssFeedLimit : 0;
         var honoured = feedCap > 0 ? Math.Clamp(feedCap - offset, 0, limit) : limit;
+
+        // Entries carry a season and episode but no air date, so a search by date has nothing
+        // to match on. Answered empty rather than as a season search, which would offer the
+        // whole of "season 2026" as a pack.
+        if (airDate is not null)
+        {
+            logger.LogInformation("\"{Query}\" asked for air date {AirDate}; searching by date is not supported",
+                q, airDate);
+            honoured = 0;
+        }
 
         var results = honoured <= 0
             ? SearchResults.Empty
@@ -305,6 +321,10 @@ public class NewznabController(
             .Distinct()
             .ToList();
     }
+
+    /// <summary>A number, or null for anything else rather than a rejected request.</summary>
+    private static int? ParseNumber(string? value) =>
+        int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number) ? number : null;
 
     private string BaseUrl() => $"{Request.Scheme}://{Request.Host}{Request.PathBase}";
 
