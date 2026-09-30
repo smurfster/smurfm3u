@@ -36,7 +36,8 @@
                     </details>
                 </div>
                 <div class="sidebar-footer">
-                    <div class="version" title="@VersionTitle">@VersionLabel</div>
+                    <a class="version" href="@ChangelogUrl" target="_blank" rel="noopener"
+                       title="@VersionTitle">@VersionLabel</a>
                 </div>
             </nav>
             <main class="content">
@@ -78,7 +79,10 @@
     // the expression itself instead of the version.
     private static string VersionLabel => $"v{AppVersion.Display}";
 
-    // Only worth showing when there is one; a build from outside a checkout has no commit.
-    private static string? VersionTitle =>
-        AppVersion.Commit is { } commit ? $"Built from {commit}" : null;
+    // The changelog on main rather than at this version's tag: someone looking is as likely to
+    // want what a newer release would bring as what this one did.
+    private const string ChangelogUrl = "https://github.com/smurfster/smurfm3u/blob/main/CHANGELOG.md";
+
+    private static string VersionTitle =>
+        AppVersion.Commit is { } commit ? $"Built from {commit}. See what changed" : "See what changed";
 }
