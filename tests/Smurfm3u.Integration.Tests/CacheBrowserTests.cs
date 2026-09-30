@@ -175,6 +175,26 @@ public class CacheBrowserTests(DatabaseFixture fixture) : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Compacting_after_a_clear_runs_and_keeps_what_is_left()
+    {
+        var id = await catalogue.PlaylistAsync("panel", M3uSourceKind.Xtream);
+        await catalogue.EntriesAsync(id, "Pacific Rim (2013)");
+        await catalogue.SeasonAsync(id, "Top Gear", 2002, season: 1, episodes: 4);
+
+        using var scope = fixture.Scope();
+        await Browser(scope).ClearSeasonsAsync([(
+            (await Browser(scope).SeriesAsync(id, null, 0, 10)).Single(), 1)]);
+
+        var (before, after) = await Browser(scope).CompactAsync();
+
+        Assert.True(before > 0);
+        Assert.True(after > 0);
+
+        await using var db = await fixture.DbFactory.CreateDbContextAsync();
+        Assert.Equal(1, await db.Items.CountAsync());
+    }
+
+    [Fact]
     public async Task Clearing_a_show_from_a_playlist_with_no_series_index_still_works()
     {
         // An m3u has no series ids at all, so a show is identified by its title and year.

@@ -8,17 +8,21 @@
 
 <div class="page-header">
     <h1>Cache</h1>
-    @if (selected is not null)
-    {
-        <div class="actions">
+    <div class="actions">
+        @if (selected is not null)
+        {
             <button class="danger" disabled="@(busy || Picked == 0)" @onclick="ClearSelectedAsync">
                 Clear selected@(Picked > 0 ? $" ({Picked})" : "")
             </button>
             <button class="small danger" disabled="@busy" @onclick="ConfirmClearSourceAsync">
                 Clear this playlist
             </button>
-        </div>
-    }
+        }
+        <button class="small" disabled="@busy" @onclick="() => confirmingCompact = true"
+                title="Clearing frees space inside the database; this gives it back to the disk.">
+            Reclaim disk space
+        </button>
+    </div>
 </div>
 
 @if (message is not null)
@@ -30,6 +34,10 @@
     What the playlists have put in the database, and what a query is answered from. Clearing is
     not permanent: films and the series list come back on the next refresh, and a panel's
     episodes come back the next time a search names their series.
+    @if (databaseSize is { } size)
+    {
+        <span>The database is using <strong>@Bytes(size)</strong> on disk.</span>
+    }
 </p>
 
 @if (summaries.Count == 0)
@@ -326,6 +334,38 @@ else
     </div>
 }
 
+@if (confirmingCompact)
+{
+    <div class="modal-backdrop" @onclick="() => { if (!busy) confirmingCompact = false; }">
+        <div class="modal" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <strong>Reclaim disk space?</strong>
+                <button type="button" class="small" disabled="@busy" @onclick="() => confirmingCompact = false">Close</button>
+            </div>
+
+            <div class="modal-body" style="padding-top:.75rem">
+                <p>
+                    Clearing removes entries, but PostgreSQL keeps the space they used for itself
+                    rather than returning it to the disk. This rewrites the cache tables without
+                    it, which is what makes the database smaller.
+                </p>
+                <p class="muted">
+                    Searches and refreshes wait until it finishes &mdash; seconds on a small
+                    catalogue, a few minutes on a very large one &mdash; and it briefly needs free
+                    disk room for a copy of what is left.
+                </p>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" disabled="@busy" @onclick="() => confirmingCompact = false">Cancel</button>
+                <button type="button" class="primary" disabled="@busy" @onclick="CompactAsync">
+                    @(busy ? "Reclaiming…" : "Reclaim space")
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
 @code {
     private enum Tab { Series, Films }
 
@@ -340,6 +380,8 @@ else
 
     private CacheSummary? selected;
     private CacheSummary? confirming;
+    private bool confirmingCompact;
+    private long? databaseSize;
 
     private Tab tab = Tab.Series;
     private string filter = string.Empty;
@@ -400,6 +442,7 @@ else
     private async Task LoadSummariesAsync()
     {
         summaries = [.. await Browser.SummariesAsync()];
+        databaseSize = await Browser.DatabaseSizeAsync();
 
         // A playlist open when the counts were re-read should show the new ones.
         if (selected is not null)
@@ -658,6 +701,39 @@ else
             busy = false;
         }
     }
+
+    private async Task CompactAsync()
+    {
+        busy = true;
+
+        try
+        {
+            var (before, after) = await Browser.CompactAsync();
+
+            confirmingCompact = false;
+            databaseSize = after;
+
+            SetMessage(before > after
+                ? $"Reclaimed {Bytes(before - after)}. The database went from {Bytes(before)} to {Bytes(after)}."
+                : $"Nothing to reclaim. The database is {Bytes(after)}.", isError: false);
+        }
+        catch (Exception ex)
+        {
+            confirmingCompact = false;
+            SetMessage($"Could not reclaim the space: {ex.Message}", isError: true);
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string Bytes(long bytes) => bytes switch
+    {
+        >= 1L << 30 => $"{bytes / (double)(1L << 30):N1} GB",
+        >= 1L << 20 => $"{bytes / (double)(1L << 20):N0} MB",
+        _ => $"{bytes / 1024.0:N0} KB"
+    };
 
     private static string Describe(CacheCleared cleared)
     {

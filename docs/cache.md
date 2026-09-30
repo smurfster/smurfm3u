@@ -72,7 +72,19 @@ and nothing would ever think to go and get them.
   waiting for the weekly re-read to come round to it.
 - A playlist you have reconfigured — changed the quality or resolution tags, say — where the
   stored entries were parsed under the old settings.
-- Reclaiming space from a catalogue you no longer search.
+- Reclaiming space from a catalogue you no longer search — followed by **Reclaim disk space**,
+  below.
+
+### Getting the disk space back
+
+Clearing on its own does not make the database any smaller. PostgreSQL deletes a row by
+marking it dead; autovacuum later lets the table reuse that space for new rows, but the files
+on disk stay the size they were.
+
+**Reclaim disk space** at the top of the page rewrites the cache tables without the dead rows
+(`VACUUM FULL`), and reports the database size before and after. Searches and refreshes wait
+while it runs — seconds on a small catalogue, minutes on a very large one — and it briefly
+needs free disk room for a copy of whatever is left. So clear first, then reclaim once.
 
 It is not a fix for a provider that has taken something down. A refresh notices that on its
 own, and so does a download answered `404`.

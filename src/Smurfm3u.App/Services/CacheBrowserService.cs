@@ -365,6 +365,48 @@ public class CacheBrowserService(IDbContextFactory<AppDbContext> dbFactory, ILog
         return new CacheCleared(entries, reset);
     }
 
+    /// <summary>How much disk the whole database is taking, in bytes.</summary>
+    public async Task<long> DatabaseSizeAsync(CancellationToken ct = default)
+    {
+        await using var db = await dbFactory.CreateDbContextAsync(ct);
+
+        return await db.Database
+            .SqlQueryRaw<long>("SELECT pg_database_size(current_database()) AS \"Value\"")
+            .SingleAsync(ct);
+    }
+
+    /// <summary>
+    /// Hands the space clearing freed back to the disk.
+    /// <para>
+    /// A delete in PostgreSQL only marks rows dead. Autovacuum later lets the table reuse that
+    /// space, but the files never shrink, so clearing alone leaves the database exactly as big
+    /// as it was. <c>VACUUM FULL</c> rewrites the tables and their indexes without the dead
+    /// rows, which is what actually gives it back. It locks the tables while it runs, so
+    /// searches and refreshes wait for it, and it needs room for the new copy while the old
+    /// one still exists - which is why it is a button rather than something every clear does.
+    /// </para>
+    /// </summary>
+    public async Task<(long Before, long After)> CompactAsync(CancellationToken ct = default)
+    {
+        var before = await DatabaseSizeAsync(ct);
+
+        await using (var db = await dbFactory.CreateDbContextAsync(ct))
+        {
+            // Rewriting a catalogue of hundreds of thousands of rows takes far longer than the
+            // default thirty seconds. VACUUM cannot run inside a transaction, and none is open here.
+            db.Database.SetCommandTimeout(TimeSpan.FromHours(1));
+
+            await db.Database.ExecuteSqlRawAsync("VACUUM (FULL, ANALYZE) \"Items\", \"Series\"", ct);
+        }
+
+        var after = await DatabaseSizeAsync(ct);
+
+        logger.LogWarning("Compacted the cache tables: database went from {Before:N0} to {After:N0} bytes",
+            before, after);
+
+        return (before, after);
+    }
+
     /// <summary>
     /// Episodes collapsed into one row per show, which is the shape both the list and its
     /// count are built from.
