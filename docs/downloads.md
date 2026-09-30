@@ -105,6 +105,17 @@ reboots repeatedly cannot exhaust the retries of a download that was working fin
 Paused downloads stay paused across a restart, because that was your decision rather than an
 accident.
 
+## File permissions
+
+Smurfm3u runs as root inside its container, and Sonarr and Radarr usually run as another user
+(the linuxserver images use `PUID`, often 1000). They have to move a finished download into
+the library, which needs write access to it - so by default everything Smurfm3u creates under
+`/downloads` is open to every user (`UMASK=000`). Without that, an import fails with
+"Permission denied" even though the *arr can see the file.
+
+Set `UMASK` in the environment to tighten it: `002` keeps write access to the owner and the
+group, which is enough when the *arrs run with a group that owns the downloads folder.
+
 ## History
 
 - **Queue** and **History** show downloads; history rows can be retried or deleted.

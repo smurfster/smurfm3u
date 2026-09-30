@@ -48,4 +48,10 @@ EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=3 \
     CMD curl --fail --silent http://localhost:8080/health || exit 1
 
-ENTRYPOINT ["dotnet", "Smurfm3u.App.dll"]
+# The app runs as root, and Sonarr and Radarr usually do not: with the default umask a
+# finished download was theirs to read but not to move, so every import failed with
+# "Permission denied". Files and folders are created open to everyone unless UMASK says
+# otherwise - 002 for owner and group only, if the *arrs share a group with this container.
+ENV UMASK=000
+
+ENTRYPOINT ["sh", "-c", "umask \"$UMASK\" && exec dotnet Smurfm3u.App.dll"]

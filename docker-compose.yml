@@ -38,6 +38,9 @@ services:
       Bootstrap__AdminPassword: ${ADMIN_PASSWORD:-}
       Bootstrap__ApiKey: ${API_KEY:-}
       TZ: ${TZ:-Etc/UTC}
+      # Permissions on what lands in /downloads. The default leaves finished downloads
+      # writable by Sonarr and Radarr, which run as a different user and have to move them.
+      UMASK: ${UMASK:-000}
     ports:
       - "${HTTP_PORT:-8090}:8080"
     volumes:
