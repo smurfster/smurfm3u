@@ -11,6 +11,24 @@ what the UI reports is always what was built.
 
 Nothing yet.
 
+## [1.6.0] - 2026-09-30
+
+### Added
+
+- **A panel's stored stream addresses move when its address or login changes.** Every entry
+  keeps the full address it streams from, and a panel's episodes are only written again when
+  their series is searched for, so a provider moving to a new domain left nearly every
+  episode pointing at a server that no longer answered. Saving a panel with a new address,
+  username or password now rewrites them, and unfinished downloads, in one go; the save
+  message says how many moved.
+
+### Fixed
+
+- **Sonarr and Radarr could not import finished downloads** ("Permission denied"). The app
+  runs as root and the *arrs usually do not, so a download could be read but not moved. The
+  container now starts with `UMASK=000`, which can be set in the environment. See
+  [File permissions](docs/downloads.md#file-permissions).
+
 ## [1.5.1] - 2026-09-30
 
 ### Fixed
@@ -579,7 +597,8 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.5.1...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.6.0...HEAD
+[1.6.0]: https://github.com/smurfster/smurfm3u/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/smurfster/smurfm3u/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/smurfster/smurfm3u/compare/v1.4.3...v1.5.0
 [1.4.3]: https://github.com/smurfster/smurfm3u/compare/v1.4.2...v1.4.3
