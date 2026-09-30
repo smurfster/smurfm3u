@@ -67,7 +67,13 @@ public static class XtreamCatalogue
                     Year = year,
                     Season = season,
                     Episode = number,
-                    EpisodeTitle = episodeTitle
+                    EpisodeTitle = episodeTitle,
+                    // A date the provider put in the episode's name is the one it went out on
+                    // here; the info block's comes from a metadata site and can be a premiere.
+                    AirDate = AirDates.Find(episode.Title)?.Date
+                              ?? AirDates.Parse(episode.Info?.AirDate)
+                              ?? AirDates.Parse(episode.Info?.ReleaseDate)
+                              ?? AirDates.Parse(episode.Info?.ReleaseDateAlt)
                 };
 
                 var entry = new M3uEntry

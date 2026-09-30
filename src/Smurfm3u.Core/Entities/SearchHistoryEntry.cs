@@ -12,6 +12,12 @@ public class SearchHistoryEntry
     public int? Season { get; set; }
     public int? Episode { get; set; }
 
+    /// <summary>
+    /// The day a daily show was asked for. Sonarr sends it as season=2026&amp;ep=09/29, and
+    /// neither half is a season or an episode.
+    /// </summary>
+    public DateOnly? AirDate { get; set; }
+
     public string? ImdbId { get; set; }
     public string? TvdbId { get; set; }
     public string? TmdbId { get; set; }

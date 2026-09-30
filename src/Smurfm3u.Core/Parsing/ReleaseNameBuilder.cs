@@ -16,7 +16,13 @@ public static class ReleaseNameBuilder
     /// <param name="qualityTag">Source tag from the M3U source, e.g. "WEB-DL".</param>
     /// <param name="resolutionTag">Resolution token, e.g. "1080p". Blank to omit.</param>
     /// <param name="releaseGroup">Group suffix, e.g. "Smurfm3u". Blank to omit.</param>
-    public static string Build(ParsedTitle parsed, string qualityTag, string? resolutionTag, string? releaseGroup)
+    /// <param name="byAirDate">
+    /// Name the episode by its air date even though it has a season and episode, because the
+    /// client asked for it by date. Sonarr places a daily show's release by the date in its
+    /// name, and a panel's numbering for one rarely matches the numbering Sonarr has.
+    /// </param>
+    public static string Build(
+        ParsedTitle parsed, string qualityTag, string? resolutionTag, string? releaseGroup, bool byAirDate = false)
     {
         var parts = new List<string>();
 
@@ -26,7 +32,14 @@ public static class ReleaseNameBuilder
         if (parsed.Year is { } year)
             parts.Add(year.ToString(CultureInfo.InvariantCulture));
 
-        if (parsed.Kind == MediaKind.Series && parsed.Season is { } season)
+        // Dated when asked for by date, and whenever a date is all there is to go on.
+        if (parsed.Kind == MediaKind.Series
+            && parsed.AirDate is { } airDate
+            && (byAirDate || parsed.Season is null))
+        {
+            parts.Add(airDate.ToString("yyyy.MM.dd", CultureInfo.InvariantCulture));
+        }
+        else if (parsed.Kind == MediaKind.Series && parsed.Season is { } season)
         {
             parts.Add(parsed.Episode is { } episode
                 ? $"S{season:D2}E{episode:D2}"

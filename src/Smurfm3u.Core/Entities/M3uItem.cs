@@ -46,6 +46,12 @@ public class M3uItem
     public int? Episode { get; set; }
     public string? EpisodeTitle { get; set; }
 
+    /// <summary>
+    /// The day an episode went out, for the daily shows Sonarr asks for by date rather than by
+    /// season and episode. Null when neither the name nor the panel gives one.
+    /// </summary>
+    public DateOnly? AirDate { get; set; }
+
     /// <summary>Container extension without the dot, e.g. "mkv". Defaults to mp4 when unknown.</summary>
     public string Extension { get; set; } = "mp4";
 

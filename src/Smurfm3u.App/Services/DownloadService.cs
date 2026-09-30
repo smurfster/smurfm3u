@@ -27,6 +27,9 @@ public class DownloadService(
     public async Task<DownloadItem> EnqueueAsync(
         string downloadId, string? category, int? priority, string? nameOverride, CancellationToken ct = default)
     {
+        if (DailyReleaseId.TryParse(downloadId, out var dailyId))
+            return await EnqueueItemsAsync([dailyId.ItemId], nameOverride, category, priority, ct, byAirDate: true);
+
         if (!SeasonPackId.TryParse(downloadId, out var packId))
         {
             return long.TryParse(downloadId, out var itemId)
@@ -53,7 +56,7 @@ public class DownloadService(
     /// </summary>
     public async Task<DownloadItem> EnqueueItemsAsync(
         IReadOnlyList<long> itemIds, string? nameOverride, string? category, int? priority,
-        CancellationToken ct = default)
+        CancellationToken ct = default, bool byAirDate = false)
     {
         if (itemIds.Count == 0)
             throw new InvalidOperationException("That release has nothing in it.");
@@ -79,7 +82,7 @@ public class DownloadService(
         {
             NzoId = NewNzoId(),
             Name = string.IsNullOrWhiteSpace(nameOverride)
-                ? ReleaseFactory.BuildName(first, first.Source)
+                ? ReleaseFactory.BuildName(first, first.Source, byAirDate)
                 : nameOverride.Trim(),
             // The default category is stored as no category, which is how rows from before
             // categories were configurable already read.

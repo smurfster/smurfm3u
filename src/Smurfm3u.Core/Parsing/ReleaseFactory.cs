@@ -16,13 +16,16 @@ public static class ReleaseFactory
         Season = item.Season,
         Episode = item.Episode,
         EpisodeTitle = item.EpisodeTitle,
+        AirDate = item.AirDate,
         SearchTitle = item.SearchTitle
     };
 
-    public static string BuildName(M3uItem item, M3uSource? source) =>
+    /// <param name="byAirDate">Name it by its air date; see <see cref="ReleaseNameBuilder.Build"/>.</param>
+    public static string BuildName(M3uItem item, M3uSource? source, bool byAirDate = false) =>
         ReleaseNameBuilder.Build(
             ToParsedTitle(item),
             source?.QualityTag ?? "WEB-DL",
             source?.ResolutionTag,
-            source?.ReleaseGroup);
+            source?.ReleaseGroup,
+            byAirDate);
 }

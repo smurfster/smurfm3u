@@ -129,27 +129,37 @@ public class NewznabController(
         var feedCap = string.IsNullOrWhiteSpace(q) ? settings.RssFeedLimit : 0;
         var honoured = feedCap > 0 ? Math.Clamp(feedCap - offset, 0, limit) : limit;
 
-        // Entries carry a season and episode but no air date, so a search by date has nothing
-        // to match on. Answered empty rather than as a season search, which would offer the
-        // whole of "season 2026" as a pack.
+        // A daily show asked for by date. The year Sonarr sends as the season is part of the
+        // date, not a season of anything, so it must not narrow the search - or offer the whole
+        // of "season 2026" as a pack.
+        DateOnly? day = null;
+
         if (airDate is not null)
         {
-            logger.LogInformation("\"{Query}\" asked for air date {AirDate}; searching by date is not supported",
-                q, airDate);
-            honoured = 0;
+            season = ep = null;
+
+            if (DateOnly.TryParseExact(airDate, "yyyy/M/d", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed))
+            {
+                day = parsed;
+            }
+            else
+            {
+                logger.LogInformation("\"{Query}\" asked for air date {AirDate}, which is not a day", q, airDate);
+                honoured = 0;
+            }
         }
 
         var results = honoured <= 0
             ? SearchResults.Empty
             : await search.SearchAsync(
-                new SearchRequest(kind, q, season, ep, categories, offset, honoured), ct);
+                new SearchRequest(kind, q, season, ep, categories, offset, honoured, AirDate: day), ct);
 
         var hits = results.Hits;
         var total = feedCap > 0 ? Math.Min(results.Total, feedCap) : results.Total;
         var apiKey = settings.ApiKey;
 
         await RecordSearchAsync(
-            kind, q, season, ep, cat, offset, limit, hits, results.Relaxed,
+            kind, q, season, ep, day, cat, offset, limit, hits, results.Relaxed,
             Stopwatch.GetElapsedTime(started), ct);
 
         var channel = new XElement("channel",
@@ -206,6 +216,11 @@ public class NewznabController(
             Attr("grabs", 0),
             Attr("files", hit.FileCount));
 
+        // A release named by date says nothing of a season and episode, and the panel's numbers
+        // alongside it would only contradict the date the client asked for.
+        if (DailyReleaseId.TryParse(hit.DownloadId, out _))
+            return element;
+
         if (hit.Item.Season is { } season)
             element.Add(Attr("season", $"S{season:D2}"));
 
@@ -231,15 +246,21 @@ public class NewznabController(
 
         var settings = await settingsService.GetAsync(ct);
 
-        return SeasonPackId.TryParse(id, out var packId)
-            ? await SeasonNzbAsync(packId, settings, ct)
-            : await EntryNzbAsync(id, settings, ct);
+        if (SeasonPackId.TryParse(id, out var packId))
+            return await SeasonNzbAsync(packId, settings, ct);
+
+        // Offered by date, so named by date: the nzb's title is what the download is filed under.
+        if (DailyReleaseId.TryParse(id, out var dailyId))
+            return await EntryNzbAsync(dailyId.ItemId, settings, byAirDate: true, ct);
+
+        return long.TryParse(id, CultureInfo.InvariantCulture, out var itemId)
+            ? await EntryNzbAsync(itemId, settings, byAirDate: false, ct)
+            : NewznabError(300, "No such item");
     }
 
-    private async Task<IActionResult> EntryNzbAsync(string id, ServiceSettings settings, CancellationToken ct)
+    private async Task<IActionResult> EntryNzbAsync(
+        long itemId, ServiceSettings settings, bool byAirDate, CancellationToken ct)
     {
-        if (!long.TryParse(id, System.Globalization.CultureInfo.InvariantCulture, out var itemId))
-            return NewznabError(300, "No such item");
 
         await using var db = await dbFactory.CreateDbContextAsync(ct);
         var item = await db.Items
@@ -250,7 +271,7 @@ public class NewznabController(
         if (item is null)
             return NewznabError(300, "No such item");
 
-        var name = Core.Parsing.ReleaseFactory.BuildName(item, item.Source);
+        var name = Core.Parsing.ReleaseFactory.BuildName(item, item.Source, byAirDate);
         var size = SizeEstimator.Estimate(item, settings);
 
         logger.LogInformation("Serving nzb for {Name}", name);
@@ -288,7 +309,7 @@ public class NewznabController(
     /// the same service, so both land in one history and can be told apart by their origin.
     /// </summary>
     private Task RecordSearchAsync(
-        SearchKind kind, string? q, int? season, int? ep, string? cat,
+        SearchKind kind, string? q, int? season, int? ep, DateOnly? airDate, string? cat,
         int offset, int limit, IReadOnlyList<SearchHit> hits, bool relaxed, TimeSpan elapsed,
         CancellationToken ct) =>
         history.RecordAsync(
@@ -299,6 +320,7 @@ public class NewznabController(
                 Query = q,
                 Season = season,
                 Episode = ep,
+                AirDate = airDate,
                 Categories = cat,
                 Offset = offset,
                 Limit = limit,

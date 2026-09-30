@@ -86,6 +86,18 @@ public static partial class ReleaseTitleParser
         if (work.Length == 0)
             return new ParsedTitle { Kind = hint, Title = string.Empty, SearchTitle = string.Empty };
 
+        // A whole date is taken out first. Left in, its year reads as the show's year and its
+        // day and month stay behind in the title: "EastEnders 29/09/2026" became "EastEnders 29 09".
+        // Not for something already known to be a film, whose name is left as it always read.
+        var airDate = hint == MediaKind.Movie ? null : AirDates.Find(work);
+        var afterDate = string.Empty;
+
+        if (airDate is { } found)
+        {
+            afterDate = work[(found.Index + found.Length)..];
+            work = work[..found.Index] + " " + afterDate;
+        }
+
         var (year, yearIndex, yearLength) = ExtractYear(work);
         var se = MatchSeasonEpisode(work, seasonAlone);
 
@@ -94,7 +106,14 @@ public static partial class ReleaseTitleParser
         int? season = null;
         int? episode = null;
 
-        if (se is { } m)
+        if (se is null && airDate is { } dated && work[..dated.Index].Trim().Length > 0)
+        {
+            // Dated and nothing else: the show is what comes before the date, and anything
+            // after it is the episode's own name.
+            titlePart = work[..dated.Index];
+            episodeTitle = Clean(afterDate, year);
+        }
+        else if (se is { } m)
         {
             season = m.Season;
             episode = m.Episode;
@@ -121,7 +140,8 @@ public static partial class ReleaseTitleParser
         if (title.Length == 0) title = Clean(work, null);
         if (title.Length == 0) title = work.Trim();
 
-        var kind = season is not null || episode is not null
+        // A date on its own marks an episode of a daily show.
+        var kind = season is not null || episode is not null || airDate is not null
             ? MediaKind.Series
             : hint != MediaKind.Unknown ? hint : MediaKind.Movie;
 
@@ -139,6 +159,7 @@ public static partial class ReleaseTitleParser
             Season = season,
             Episode = episode,
             EpisodeTitle = episodeTitle,
+            AirDate = airDate?.Date,
             SearchTitle = Normalize(title)
         };
     }

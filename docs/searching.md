@@ -101,6 +101,22 @@ Language and quality badges (`EN -`, `|VIP|`, `[4K]`) are stripped, as are resol
 source and codec tokens that would otherwise leak into the title. The year is kept and
 placed where the *arr parsers expect it. Numeric titles such as `1917 (2019)` survive.
 
+## Daily shows
+
+Soaps, news and chat shows are known by the day they aired rather than by a season and
+episode, and Sonarr searches for them that way: `season=2026&ep=09/29`. An entry's air date
+comes from its name when the provider wrote one there (`EastEnders 29/09/2026`,
+`EastEnders 2026-09-29`), and otherwise from the panel's own air or release date for the
+episode. A day and month that could be either way round are read day first.
+
+A search by date matches on the date alone, and the releases it offers are named by date,
+`EastEnders.2026.09.29.1080p.WEB-DL-Smurfm3u`, which is what Sonarr places a daily episode by.
+An entry that has nothing but a date is always named that way; one the panel also numbers
+keeps its `S42E150` name everywhere else, including the RSS feed.
+
+Air dates are read when a playlist is refreshed, or when a panel series' episodes are
+fetched, so entries already stored pick theirs up on the next refresh.
+
 ## Season packs
 
 When a client searches for a season rather than a single episode &mdash; Sonarr's

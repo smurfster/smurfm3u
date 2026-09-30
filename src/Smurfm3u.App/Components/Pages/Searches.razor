@@ -326,13 +326,15 @@ else
     }
 
     private static string EpisodeLabel(SearchHistoryEntry entry) =>
-        (entry.Season, entry.Episode) switch
-        {
-            (null, null) => "-",
-            ({ } s, null) => $"S{s:D2}",
-            (null, { } e) => $"E{e:D2}",
-            ({ } s, { } e) => $"S{s:D2}E{e:D2}"
-        };
+        entry.AirDate is { } airDate
+            ? airDate.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture)
+            : (entry.Season, entry.Episode) switch
+            {
+                (null, null) => "-",
+                ({ } s, null) => $"S{s:D2}",
+                (null, { } e) => $"E{e:D2}",
+                ({ } s, { } e) => $"S{s:D2}E{e:D2}"
+            };
 
     private static string ClientLabel(SearchHistoryEntry entry)
     {

@@ -90,6 +90,12 @@ public class ReleaseDetailsService(
     private async Task<ReleaseDetails?> DescribeEntryAsync(
         string downloadId, ServiceSettings settings, CancellationToken ct)
     {
+        // Offered by its air date: the same entry, under the dated name it was offered as.
+        var byAirDate = DailyReleaseId.TryParse(downloadId, out var dailyId);
+
+        if (byAirDate)
+            downloadId = dailyId.ItemId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
         if (!long.TryParse(downloadId, System.Globalization.CultureInfo.InvariantCulture, out var itemId))
             return null;
 
@@ -103,8 +109,8 @@ public class ReleaseDetailsService(
         if (item is null) return null;
 
         return new ReleaseDetails(
-            DownloadId: downloadId,
-            ReleaseName: ReleaseFactory.BuildName(item, item.Source),
+            DownloadId: byAirDate ? dailyId.ToString() : downloadId,
+            ReleaseName: ReleaseFactory.BuildName(item, item.Source, byAirDate),
             IsSeasonPack: false,
             Kind: item.Kind,
             Title: item.Title,
@@ -112,13 +118,13 @@ public class ReleaseDetailsService(
             Season: item.Season,
             PlaylistName: item.Source?.Name,
             TotalSizeBytes: SizeEstimator.Estimate(item, settings),
-            Files: [Describe(item, settings)]);
+            Files: [Describe(item, settings, byAirDate)]);
     }
 
-    private static ReleaseFileDetail Describe(M3uItem item, ServiceSettings settings) =>
+    private static ReleaseFileDetail Describe(M3uItem item, ServiceSettings settings, bool byAirDate = false) =>
         new(
             item.Id,
-            ReleaseFactory.BuildName(item, item.Source),
+            ReleaseFactory.BuildName(item, item.Source, byAirDate),
             item.Season,
             item.Episode,
             item.EpisodeTitle,

@@ -85,6 +85,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasIndex(x => new { x.Kind, x.IsActive });
             e.HasIndex(x => new { x.SearchTitle, x.Season, x.Episode });
 
+            // A daily show is asked for by date, which narrows far harder than the title does.
+            e.HasIndex(x => x.AirDate);
+
             e.HasIndex(x => x.SearchTitle)
                 .HasDatabaseName("ix_items_searchtitle_trgm")
                 .HasMethod("gin")

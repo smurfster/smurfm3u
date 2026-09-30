@@ -242,6 +242,7 @@ public class M3uRefreshService(
         item.Season = parsed.Season;
         item.Episode = parsed.Episode;
         item.EpisodeTitle = Truncate(parsed.EpisodeTitle, 500);
+        item.AirDate = parsed.AirDate;
         item.Extension = verdict.Extension.Length > 0 ? verdict.Extension : "mp4";
         item.LastSeenAt = stamp;
         item.IsActive = true;

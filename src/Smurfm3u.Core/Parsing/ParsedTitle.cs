@@ -11,6 +11,9 @@ public sealed record ParsedTitle
     public int? Episode { get; init; }
     public string? EpisodeTitle { get; init; }
 
+    /// <summary>The day an episode went out, when the name or the panel says. See <see cref="AirDates"/>.</summary>
+    public DateOnly? AirDate { get; init; }
+
     /// <summary>Lowercased alphanumeric form of <see cref="Title"/>, used for matching queries.</summary>
     public string SearchTitle { get; init; } = string.Empty;
 }

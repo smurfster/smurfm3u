@@ -233,4 +233,9 @@ public sealed class XtreamEpisode
 public sealed class XtreamEpisodeInfo
 {
     [JsonPropertyName("duration_secs")][JsonConverter(typeof(LooseIntConverter))] public int? DurationSeconds { get; init; }
+
+    // Panels name the day an episode aired differently; whichever is there is used.
+    [JsonPropertyName("air_date")][JsonConverter(typeof(LooseStringConverter))] public string? AirDate { get; init; }
+    [JsonPropertyName("releasedate")][JsonConverter(typeof(LooseStringConverter))] public string? ReleaseDate { get; init; }
+    [JsonPropertyName("release_date")][JsonConverter(typeof(LooseStringConverter))] public string? ReleaseDateAlt { get; init; }
 }

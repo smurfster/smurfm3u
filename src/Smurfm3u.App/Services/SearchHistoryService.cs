@@ -96,7 +96,8 @@ public class SearchHistoryService(
             .Select(itemId => items.TryGetValue(itemId, out var item)
                 ? new RecordedResult(
                     itemId,
-                    ReleaseFactory.BuildName(item, item.Source),
+                    // As it was offered: a search by date was answered under dated names.
+                    ReleaseFactory.BuildName(item, item.Source, entry.AirDate is not null),
                     item.Source?.Name,
                     item.Kind,
                     item.IsActive)

@@ -22,7 +22,12 @@ public sealed record SearchRequest(
     /// endpoint always sends: a client has no way to name one, and would not know what to
     /// name. The web UI does, and uses it to ask one playlist at a time.
     /// </summary>
-    IReadOnlyCollection<int>? Sources = null);
+    IReadOnlyCollection<int>? Sources = null,
+    /// <summary>
+    /// A daily show asked for by the day it aired. Matched on that alone, in place of a season
+    /// and episode, and answered under dated release names.
+    /// </summary>
+    DateOnly? AirDate = null);
 
 /// <summary>
 /// One offered release. <paramref name="DownloadId"/> is what a client grabs it by: a plain
@@ -126,7 +131,7 @@ public class SearchService(
             var packs = await PacksAsync(request, strict, settings, ct);
 
             return new SearchResults(
-                [.. packs, .. Project(items, settings)],
+                [.. packs, .. Project(items, settings, request.AirDate is not null)],
                 await strict.CountAsync(ct) + packs.Count,
                 false);
         }
@@ -150,7 +155,7 @@ public class SearchService(
                 var packs = await PacksAsync(request, strict, settings, ct);
 
                 return new SearchResults(
-                    [.. packs, .. Project(items, settings)],
+                    [.. packs, .. Project(items, settings, request.AirDate is not null)],
                     await strict.CountAsync(ct) + packs.Count,
                     false);
             }
@@ -180,7 +185,7 @@ public class SearchService(
             logger.LogInformation("No entry has every word of \"{Query}\"; returning {Count} near match(es)",
                 request.Query, near.Count);
 
-        return new SearchResults(Project(near, settings), near.Count, near.Count > 0);
+        return new SearchResults(Project(near, settings, request.AirDate is not null), near.Count, near.Count > 0);
     }
 
     /// <summary>
@@ -198,6 +203,7 @@ public class SearchService(
         if (!settings.SeasonPacks) return [];
         if (request.Offset > 0) return [];
         if (request.Kind is not (SearchKind.Search or SearchKind.TvSearch)) return [];
+        if (request.AirDate is not null) return [];
         if (request.Season is not { } season || request.Episode is not null) return [];
 
         var packs = await seasonPacks.BuildAsync(matched, season, settings, ct);
@@ -281,7 +287,7 @@ public class SearchService(
     /// </summary>
     private static SearchRequest Interpret(SearchRequest request)
     {
-        if (request.Season is not null || request.Episode is not null) return request;
+        if (request.Season is not null || request.Episode is not null || request.AirDate is not null) return request;
 
         var interpreted = SearchQuery.Interpret(request.Query);
 
@@ -314,6 +320,11 @@ public class SearchService(
         if (ResolveKind(request) is { } wanted)
             query = query.Where(x => x.Kind == wanted);
 
+        // A date stands in for the season and episode, which for a daily show mean nothing
+        // the client could know.
+        if (request.AirDate is { } airDate)
+            return query.Where(x => x.AirDate == airDate);
+
         if (request.Season is { } season)
             query = query.Where(x => x.Season == season);
 
@@ -340,17 +351,20 @@ public class SearchService(
         return query;
     }
 
-    private static IReadOnlyList<SearchHit> Project(List<M3uItem> items, ServiceSettings settings) =>
+    private static IReadOnlyList<SearchHit> Project(List<M3uItem> items, ServiceSettings settings, bool byAirDate) =>
         items.Select(item =>
         {
             var (category, subCategory) = CategoriesFor(item);
             return new SearchHit(
                 item,
-                ReleaseFactory.BuildName(item, item.Source),
+                ReleaseFactory.BuildName(item, item.Source, byAirDate),
                 SizeEstimator.Estimate(item, settings),
                 category,
                 subCategory,
-                item.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                // Offered by date, so grabbed by date: the id carries which name it was.
+                byAirDate
+                    ? new DailyReleaseId(item.Id).ToString()
+                    : item.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));
         }).ToList();
 
     /// <summary>
