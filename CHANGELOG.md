@@ -11,6 +11,13 @@ what the UI reports is always what was built.
 
 Nothing yet.
 
+## [1.4.2] - 2026-09-30
+
+### Changed
+
+- **Links to the documentation and the repository** in the sidebar, above the version. Both
+  open on GitHub in a new tab.
+
 ## [1.4.1] - 2026-09-30
 
 ### Changed
@@ -531,7 +538,8 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.4.1...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.4.2...HEAD
+[1.4.2]: https://github.com/smurfster/smurfm3u/compare/v1.4.1...v1.4.2
 [1.4.1]: https://github.com/smurfster/smurfm3u/compare/v1.4.0...v1.4.1
 [1.4.0]: https://github.com/smurfster/smurfm3u/compare/v1.3.2...v1.4.0
 [1.3.2]: https://github.com/smurfster/smurfm3u/compare/v1.3.1...v1.3.2
