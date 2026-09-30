@@ -36,6 +36,10 @@
                     </details>
                 </div>
                 <div class="sidebar-footer">
+                    <div class="footer-links">
+                        <a href="@DocsUrl" target="_blank" rel="noopener">Documentation</a>
+                        <a href="@RepoUrl" target="_blank" rel="noopener">GitHub</a>
+                    </div>
                     <a class="version" href="@ChangelogUrl" target="_blank" rel="noopener"
                        title="@VersionTitle">@VersionLabel</a>
                 </div>
@@ -81,7 +85,11 @@
 
     // The changelog on main rather than at this version's tag: someone looking is as likely to
     // want what a newer release would bring as what this one did.
-    private const string ChangelogUrl = "https://github.com/smurfster/smurfm3u/blob/main/CHANGELOG.md";
+    private const string RepoUrl = "https://github.com/smurfster/smurfm3u";
+    private const string ChangelogUrl = RepoUrl + "/blob/main/CHANGELOG.md";
+
+    // The index of the docs in the README, which links to every page under docs/.
+    private const string DocsUrl = RepoUrl + "#documentation";
 
     private static string VersionTitle =>
         AppVersion.Commit is { } commit ? $"Built from {commit}. See what changed" : "See what changed";
