@@ -11,6 +11,18 @@ what the UI reports is always what was built.
 
 Nothing yet.
 
+## [1.5.1] - 2026-09-30
+
+### Fixed
+
+- **A panel refusing to list a series retired all of its episodes.** A failed request for a
+  series' episodes, such as a 403, was read as the series having none, and every episode
+  stored for it was taken off offer. A failed request now leaves what is stored alone, and an
+  empty episode list never retires a whole series.
+- **Episodes stored before 1.5.0 had no air date,** so a search by date could not find them
+  until the panel was asked about them again. Their dates are now read from the names
+  already stored, once, at startup.
+
 ## [1.5.0] - 2026-09-30
 
 ### Added
@@ -567,7 +579,8 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.5.1...HEAD
+[1.5.1]: https://github.com/smurfster/smurfm3u/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/smurfster/smurfm3u/compare/v1.4.3...v1.5.0
 [1.4.3]: https://github.com/smurfster/smurfm3u/compare/v1.4.2...v1.4.3
 [1.4.2]: https://github.com/smurfster/smurfm3u/compare/v1.4.1...v1.4.2
