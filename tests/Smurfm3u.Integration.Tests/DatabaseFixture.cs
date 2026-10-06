@@ -61,6 +61,9 @@ public sealed class DatabaseFixture : IAsyncLifetime
         services.AddScoped<BackupService>();
         services.AddScoped<ReleaseDetailsService>();
         services.AddScoped<PanelMoveService>();
+        services.AddSingleton<SmtpNotifier>();
+        services.AddScoped<NotificationService>();
+        services.AddScoped<M3uRefreshService>();
 
         provider = services.BuildServiceProvider();
         DbFactory = provider.GetRequiredService<IDbContextFactory<AppDbContext>>();

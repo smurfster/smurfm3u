@@ -92,6 +92,11 @@ public class M3uRefreshService(
             var pending = 0;
             var nextReport = ProgressInterval;
 
+            // Keys already handled this run. A playlist or panel that lists one stream twice - a
+            // film filed under two categories - would otherwise have it inserted twice, and the
+            // second insert breaks the unique key and fails the whole refresh.
+            var handled = new HashSet<string>(StringComparer.Ordinal);
+
             await foreach (var candidate in ReadAsync(source, ct))
             {
                 total++;
@@ -102,6 +107,9 @@ public class M3uRefreshService(
 
                 var entry = candidate.Entry;
                 var key = ItemKeyFor(entry.Url);
+
+                // The first listing wins; a repeat of the same stream adds nothing.
+                if (!handled.Add(key)) continue;
 
                 // A panel states the season and episode; a playlist leaves them to be read
                 // back out of the display name, which is the best that can be done there.

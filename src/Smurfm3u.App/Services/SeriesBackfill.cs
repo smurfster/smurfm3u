@@ -188,7 +188,39 @@ public class SeriesBackfill(
         return stored;
     }
 
+    /// <summary>
+    /// One fetch at a time. Sonarr searches several episodes at once, and each search can set
+    /// off a fetch of the same series: both found its episodes missing, both inserted them, and
+    /// the second insert broke the unique key. Panels often allow one connection anyway.
+    /// </summary>
+    private static readonly SemaphoreSlim FetchGate = new(1, 1);
+
     private async Task<int> FetchAsync(AppDbContext db, M3uSeries series, CancellationToken ct)
+    {
+        var asked = clock.GetUtcNow();
+
+        await FetchGate.WaitAsync(ct);
+
+        try
+        {
+            // Fetched by whoever held the gate while this waited, so there is nothing to add.
+            var fetchedAt = await db.Series
+                .AsNoTracking()
+                .Where(x => x.Id == series.Id)
+                .Select(x => x.EpisodesFetchedAt)
+                .FirstOrDefaultAsync(ct);
+
+            if (fetchedAt >= asked) return 0;
+
+            return await FetchUngatedAsync(db, series, ct);
+        }
+        finally
+        {
+            FetchGate.Release();
+        }
+    }
+
+    private async Task<int> FetchUngatedAsync(AppDbContext db, M3uSeries series, CancellationToken ct)
     {
         var source = await db.Sources.AsNoTracking().FirstOrDefaultAsync(x => x.Id == series.SourceId, ct);
 
@@ -219,6 +251,10 @@ public class SeriesBackfill(
             logger.LogWarning(ex, "Could not fetch episodes for {Series} ({Id})", series.Title, series.SeriesId);
             return 0;
         }
+
+        // A panel can list one episode twice - under two seasons, or twice in one - and both
+        // copies would be inserted. The first listing wins.
+        episodes = [.. episodes.DistinctBy(x => M3uRefreshService.ItemKeyFor(x.Entry.Url))];
 
         var keys = episodes.Select(x => M3uRefreshService.ItemKeyFor(x.Entry.Url)).ToList();
 
