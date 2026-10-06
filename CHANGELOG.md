@@ -11,6 +11,16 @@ what the UI reports is always what was built.
 
 Nothing yet.
 
+## [1.6.1] - 2026-10-06
+
+### Fixed
+
+- **A refresh or an episode fetch could fail with "duplicate key value violates unique
+  constraint IX_Items_SourceId_ItemKey".** A stream listed twice - a film filed under two
+  categories, an episode under two seasons - was inserted twice, and two searches fetching the
+  same series at once both inserted its episodes. A repeated stream is now stored once, and
+  series fetches take turns.
+
 ## [1.6.0] - 2026-09-30
 
 ### Added
@@ -597,7 +607,8 @@ here so the history is not lost.
   inside the form.
 - **Data protection keys** persisted to a volume, so a rebuild does not sign everyone out.
 
-[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.6.0...HEAD
+[Unreleased]: https://github.com/smurfster/smurfm3u/compare/v1.6.1...HEAD
+[1.6.1]: https://github.com/smurfster/smurfm3u/compare/v1.6.0...v1.6.1
 [1.6.0]: https://github.com/smurfster/smurfm3u/compare/v1.5.1...v1.6.0
 [1.5.1]: https://github.com/smurfster/smurfm3u/compare/v1.5.0...v1.5.1
 [1.5.0]: https://github.com/smurfster/smurfm3u/compare/v1.4.3...v1.5.0
